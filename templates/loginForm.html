@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login</title>
+    <style>
+        h1 { color: green; }
+        .error { color: red; }
+    </style>
+</head>
+
+
+<body>
+   
+    {% if error %}
+        <p class="error">{{ error }}</p>
+    {% endif %}
+
+    <form action="{{ url_for('make_loginform') }}" method="post">
+        {{ form.csrf_token }}
+        {{ form.hidden_tag() }}
+        <p>{{ form.name.label }} {{ form.name() }}</p>
+        <p>{{ form.pwd.label }} {{ form.pwd() }}</p>
+        {% if form.name.errors %}
+            <ul class="errors">
+                {% for error in form.name.errors %}
+                    <li>{{ error }}</li>
+                {% endfor %}
+            </ul>
+        {% endif %}
+        <p><input type="submit" value="Submit"></p>
+    </form>
+
+    <a href="{{ url_for('index') }}"><button type = "button">Retour à l'accueil</button></a>
+</body>
+</html>

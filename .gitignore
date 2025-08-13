@@ -1,0 +1,11 @@
+venv/
+template/Tests.html
+00_DB_MembresSympathisants_2025_A-J.xls
+00_DB_MembresSympathisants_2025_K-Z.xls
+01_DB_Fermes.xls
+02_DB_FormationAgricole.xls
+03_DB_MAP_Politiques.xlsx
+04_DB_MAP_Presse.xls
+test.txt
+tests.py
+__pycache__

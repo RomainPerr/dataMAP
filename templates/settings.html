@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login</title>
+    <style>
+        h1 { color: green; }
+        .error { color: red; }
+    </style>
+
+</head>
+
+<body>
+    <h1>Paramètres de l'application</h1>
+    <h2>Emplacements des fichiers de base de données</h2>
+    <ul>
+        {% for category, entries in cache.items() %}
+            {% if entries is mapping %}
+            <li>{{ category}}
+            <ul>
+            {% for key, value in entries.items() %}
+                <li>
+                {{ key }}: 
+                <button type="button" onclick="toggleOptions('{{ category }}', '{{key}}')">{{ value }}</button>
+                <div id="{{ category }}-{{ key }}" style="display:none; margin-top:5px;">
+                    <button type="button" onclick="deleteEntry('{{ category }}', '{{key}}')">Supprimer</button>
+                    <button type="button" onclick="showEdit('{{ category }}', '{{key}}', '{{ value }}')">Modifier</button>
+                    <div id="edit-{{category}}-{{ key }}" style="display:none; margin-top:5px;">
+                    <input type="text" id="input-{{ category }}-{{ key }}" value="{{ value }}">
+                    <button type="button" onclick="saveEdit('{{ category }}', '{{key}}')">Enregistrer</button>
+                    <button type="button" onclick="cancelEdit('{{ category }}', '{{key}}')">Annuler</button>
+                    </div>
+                </div>
+                </li>
+            {% endfor %}
+            </li>
+
+            {% if not cache[category] %}
+                <li>Aucun emplacement de base de données défini.</li>
+            {% endif %}
+
+            <li>
+                <form action="/addEntry" method="post">
+                    {{ form.csrf_token }}
+                    {{ form.hidden_tag() }}
+                    <input type="hidden" name="category" value="{{ category }}">
+                    <input type="text" name="key" placeholder="Nom" required>
+                    <input type="text" name="value" placeholder="Valeur" required>
+                    <button type="submit">Ajouter</button>
+                </form>
+            </li>
+            </ul>
+
+            {% elif entries is string %}
+            <li>
+                {{ category }}: 
+                <button type="button" onclick="toggleOptions('{{ category }}', '{{ category }}')">{{ entries }}</button>
+                <div id="{{ category }}-{{ category }}" style="display:none; margin-top:5px;">
+                <button type="button" onclick="showEdit('{{ category }}', '{{ category }}', '{{ entries }}')">Modifier</button>
+                <div id="edit-{{ category }}-{{ category }}" style="display:none; margin-top:5px;">
+                    <input type="text" id="input-{{ category }}-{{ category }}" value="{{ entries }}">
+                    <button type="button" onclick="saveEdit('{{ category }}', '{{ category }}')">Enregistrer</button>
+                    <button type="button" onclick="cancelEdit('{{ category }}', '{{ category }}')">Annuler</button>
+                </div>
+                </div>
+            </li>
+            {% endif %}
+        {% endfor %}
+        
+    </ul>
+
+    <a href="{{ url_for('index') }}"><button type = "button">Retour à l'accueil</button></a>
+
+        <script>
+        function toggleOptions(category, key) {
+            var el = document.getElementById(category + '-' + key);
+            if (el.style.display === 'none') {
+                el.style.display = 'block';
+            } else {
+                el.style.display = 'none';
+            }
+        }
+
+
+        function deleteEntry(category, key) {
+            fetch('{{ url_for("deleteEntry") }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                body: JSON.stringify({ key: key, category: category })
+            })
+            .then(response => {
+                if (response.ok) {
+                    location.reload();
+                } else {
+                    alert('Erreur lors de la suppression.');
+                }
+            });
+        }
+
+        function showEdit(category, key, value) {
+            document.getElementById('edit-' + category + '-' + key).style.display = 'block';
+        }
+
+        function saveEdit(category, key) {
+            var newValue = document.getElementById('input-' + category + '-' + key).value;
+            fetch('{{ url_for("editEntry") }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                body: JSON.stringify({ key: key, category: category, value: newValue })
+            })
+            .then(response => {
+                if (response.ok) {
+                    location.reload();
+                } else {
+                    alert('Erreur lors de la modification.');
+                }
+            });
+            alert('Nouveau: ' + newValue + ' pour ' + key);
+            cancelEdit(category, key);
+        }
+
+        function cancelEdit(category, key) {
+            document.getElementById('edit-' + category + '-' + key).style.display = 'none';
+        }
+    </script>
+
+
+</body>
+</html>

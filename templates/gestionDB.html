@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="fr">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Gestion de la base de données</title>
+        <link rel="shortcut icon" type="image/x-icon" href="{{ url_for('static', filename='LOGOTYPE_MAP.ico') }}">
+        <style>
+            h1 { color: green; }
+            .error { color: red; }
+        </style>
+    </head>
+
+    <body>
+        <h1>Gestion de la base de données</h1>
+
+        <button onclick="openAffichageModal()">Affichage</button>
+
+        <div id="affichageModal" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.5); align-items:center; justify-content:center; z-index:1000; overflow:auto;">
+            <div style="background:white; padding:20px; border-radius:8px; min-width:400px; max-height:90vh; overflow:auto;">
+                <h2>Colonnes en détail</h2>
+                <div style="display:flex; gap:40px;">
+                    <div>
+                        <h3>En détail</h3>
+                        <ul id="detailCols" style="min-width:150px; min-height:200px; border:1px solid #ccc; padding:10px;" ondrop="drop(event, 'detailCols')" ondragover="allowDrop(event)">
+                        </ul>
+                    </div>
+                    <div>
+                        <h3>Non détaillées</h3>
+                        <ul id="otherCols" style="min-width:150px; min-height:200px; border:1px solid #ccc; padding:10px;" ondrop="drop(event, 'otherCols')" ondragover="allowDrop(event)">
+                        </ul>
+                    </div>
+                </div>
+                <div style="margin-top:20px; text-align:right;">
+                    <button onclick="submitAffichage()">Valider</button>
+                    <button onclick="closeAffichageModal()">Fermer</button>
+                </div>
+            </div>
+        </div>
+
+        <script>
+            function openAffichageModal() {
+                fetch('/getAffichageData')
+                    .then(response => response.json())
+                    .then(data => {
+                        const detailCols = data["Colonnes en détails"];
+                        const allCols = data["Toutes les colonnes"];
+                        const otherCols = allCols.filter(col => !detailCols.includes(col));
+
+                        const detailList = document.getElementById('detailCols');
+                        const otherList = document.getElementById('otherCols');
+                        detailList.innerHTML = '';
+                        otherList.innerHTML = '';
+
+                        detailCols.forEach(col => {
+                            let li = document.createElement('li');
+                            li.textContent = col;
+                            li.draggable = true;
+                            li.ondragstart = drag;
+                            li.style.cursor = 'grab';
+                            li.setAttribute('data-col', col);
+                            detailList.appendChild(li);
+                        });
+                        otherCols.forEach(col => {
+                            let li = document.createElement('li');
+                            li.textContent = col;
+                            li.draggable = true;
+                            li.ondragstart = drag;
+                            li.style.cursor = 'grab';
+                            li.setAttribute('data-col', col);
+                            otherList.appendChild(li);
+                        });
+
+                        document.getElementById('affichageModal').style.display = 'flex';
+                    });
+            }
+
+            function closeAffichageModal() {
+                document.getElementById('affichageModal').style.display = 'none';
+            }
+
+            function allowDrop(ev) {
+                ev.preventDefault();
+            }
+
+            function drag(ev) {
+                ev.dataTransfer.setData("text", ev.target.getAttribute('data-col'));
+                ev.dataTransfer.setData("sourceId", ev.target.parentElement.id);
+            }
+
+            function drop(ev, targetId) {
+                ev.preventDefault();
+                const col = ev.dataTransfer.getData("text");
+                const sourceId = ev.dataTransfer.getData("sourceId");
+                if (sourceId === targetId) return;
+                const sourceList = document.getElementById(sourceId);
+                const targetList = document.getElementById(targetId);
+                let draggedItem;
+                Array.from(sourceList.children).forEach(li => {
+                    if (li.getAttribute('data-col') === col) {
+                        draggedItem = li;
+                    }
+                });
+                if (draggedItem) {
+                    targetList.appendChild(draggedItem);
+                }
+            }
+
+            function submitAffichage() {
+                const detailCols = Array.from(document.getElementById('detailCols').children).map(li => li.getAttribute('data-col'));
+                fetch('/setdetailcontent', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': '{{ csrf_token }}'
+                    },
+                    body: JSON.stringify({ 'Colonne en détails' : detailCols })
+                })
+                .then(response => {
+                    if (response.ok) {
+                        closeAffichageModal();
+                        location.reload();
+                    } else {
+                        alert('Erreur lors de la soumission.');
+                    }
+                })
+                .catch(() => {
+                    alert('Erreur lors de la soumission.');
+                });
+            }
+        </script>
+
+
+        <div style="display: flex; align-items: flex-start; margin-top: 20px; margin-bottom: 20px;">
+            <div style="flex: 1;">
+                {{ df|safe }}
+            </div>
+            <form id="addColumnForm" method="POST" action="/addColumn" style="margin-left: 32px; display: flex; flex-direction: column; background: grey; padding: 16px; border-radius: 8px; min-width: 220px;">
+                <input type="text" name="column_name_1" placeholder="Titre 1" list = "titres1" style="margin-bottom: 8px;">
+                <datalist id="titres1">
+                    {% for col in full_columns[0] %}
+                        <option>{{col}}</option>
+                    {% endfor %}
+                </datalist>
+                <input type="text" name="column_name_2" placeholder="Titre 2" list = "titres2" style="margin-bottom: 8px;">
+                <datalist id="titres2">
+                    {% for col in full_columns[1] %}
+                        <option>{{col}}</option>
+                    {% endfor %}
+                </datalist>
+                <input type="text" name="column_name_3" placeholder="Titre 3" list = "titres3" required style="margin-bottom: 8px;">
+                <datalist id="titres3">
+                    {% for col in full_columns[2] %}
+                        <option>{{col}}</option>
+                    {% endfor %}
+                </datalist>
+
+                <button class="btn btn-success" type="submit">
+                    Ajouter une colonne
+                </button>
+            </form>
+        </div>
+        
+
+        <form action="{{ url_for('appendRow') }}" method="post">
+            {{ form.csrf_token }}
+            {{ form.hidden_tag() }}
+            <input type="hidden" name="db" value="politiques">
+            <table style="margin-left:auto; margin-right:auto;">
+            <tr>
+            {% for col in columns %}
+            <td>
+                <input type="text" name="{{ col }}" placeholder="{{ col }}">
+            </td>
+            {% endfor %}
+            <td>
+                <button type="submit">Ajouter</button>
+            </td>
+            </tr>
+            </table>
+        </form>
+        </form>
+
+
+
+        <script>
+            function deleteRow(rowID) {
+                fetch('/deleteRow', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': '{{ csrf_token }}'
+                    },
+                    body: JSON.stringify({ rowID: rowID })
+                })
+                .then(response => {
+                    if (response.ok) {
+                        location.reload();
+                    } else {
+                        alert('Erreur lors de la suppression de la ligne.');
+                    }
+                })
+                .catch(error => {
+                    alert('Erreur lors de la suppression de la ligne.');
+                });
+            }
+
+            function deleteColumn(colName) {
+                fetch('/deleteColumn', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': '{{ csrf_token }}'
+                    },
+                    body: JSON.stringify({ "column_name": colName })
+                })
+                .then(response => {
+                    if (response.ok) {
+                        location.reload();
+                    } else {
+                        alert('Erreur lors de la suppression de la colonne.');
+                    }
+                })
+                .catch(error => {
+                    alert('Erreur lors de la suppression de la colonne.');
+                });
+            }
+
+            function showDetails(rowID) {
+                // Create a modal overlay
+                let modal = document.createElement('div');
+                modal.style.position = 'fixed';
+                modal.style.top = '0';
+                modal.style.left = '0';
+                modal.style.width = '100vw';
+                modal.style.height = '100vh';
+                modal.style.background = 'rgba(0,0,0,0.5)';
+                modal.style.display = 'flex';
+                modal.style.alignItems = 'center';
+                modal.style.justifyContent = 'center';
+                modal.style.zIndex = '1000';
+
+                // Create the modal content container
+                let content = document.createElement('div');
+                content.style.background = 'white';
+                content.style.padding = '20px';
+                content.style.borderRadius = '8px';
+                content.style.minWidth = '300px';
+                content.innerHTML = '<p>ID = ' + rowID + '</p>';
+
+                // Add a close button
+                let closeBtn = document.createElement('button');
+                closeBtn.textContent = 'Fermer';
+                closeBtn.onclick = () => document.body.removeChild(modal);
+                content.appendChild(closeBtn);
+
+                modal.appendChild(content);
+                document.body.appendChild(modal);
+
+                // Fetch and display details (example endpoint)
+                fetch(`/rowDetails/${rowID}`)
+                    .then(response => response.text())
+                    .then(text => {
+                        let details;
+                        try {
+                            details = JSON.parse(text);
+                        } catch {
+                            details = null;
+                        }
+                        let html = '<ul>';
+                        if (details && typeof details === 'object') {
+                            for (const [key, value] of Object.entries(details)) {
+                                html += `<li><strong>${key}:</strong> ${value}</li>`;
+                            }
+                        } else {
+                            html += '<li>Aucune donnée disponible.</li>';
+                        }
+                        html += '</ul>';
+                        content.innerHTML = html;
+                        content.appendChild(closeBtn);
+                    })
+                    .catch(() => {
+                        content.innerHTML = '<p>Erreur lors du chargement des détails.</p>';
+                        content.appendChild(closeBtn);
+                    });
+            }
+        </script>
+        
+        
+    </body>
+</html>

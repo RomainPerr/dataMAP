@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+
+<html>
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Interface base de données</title>
+        <style>
+            h1 { color: green; }
+            .error { color: red; }
+        </style>
+    </head>
+
+
+    <body>
+        <h1>Interface base de données</h1>
+        
+        <ul>
+            <li><a href="{{ url_for('make_loginform') }}">Connexion</a></li>
+            <li><a href="{{ url_for('settings') }}">Paramètres</a></li>
+            <li><a href="{{ url_for('menuDB') }}">Menu bases de données</a></li>
+        </ul>
+
+    </body>
+</html>
