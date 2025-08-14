@@ -1,0 +1,54 @@
+#dragRoot {
+  -moz-user-select: none;
+  -ms-user-select: none;
+  -webkit-user-select: none;
+  user-select: none;
+  cursor: default;
+  border: 1px solid black;
+  margin: 10px;
+  padding: 10px;
+  width: 300px;
+  overflow-y: scroll;
+  white-space: nowrap;
+}
+#dragRoot ul {
+  display: block;
+  margin: 0;
+  padding: 0 0 0 20px;
+}
+#dragRoot li {
+  display: block;
+  margin: 2px;
+  padding: 2px 2px 2px 0;
+}
+#dragRoot li [class*="node"] {
+  display: inline-block;
+}
+#dragRoot li [class*="node"].hover {
+  background-color: navy;
+  color: white;
+}
+#dragRoot li .node-facility {
+  color: navy;
+  font-weight: bold;
+}
+#dragRoot li .node-cpe {
+  color: black;
+  cursor: pointer;
+}
+#dragRoot li li {
+  border-left: 1px solid silver;
+}
+#dragRoot li li:before {
+  color: silver;
+  font-weight: 300;
+  content: "— ";
+}
+#labelConfigModal {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 1000;
+  display: block;
+}

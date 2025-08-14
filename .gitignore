@@ -9,3 +9,5 @@ template/Tests.html
 test.txt
 tests.py
 __pycache__
+package.json
+package-lock.json

@@ -1,13 +1,101 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gestion des étiquettes</title>
-    <link rel="shortcut icon" type="image/x-icon" href="{{ url_for('static', filename='LOGOTYPE_MAP.ico') }}">
+  <meta charset="UTF-8">
+  <title>Gérer les étiquettes</title>
+  <link rel="icon" type="image/x-icon" href="{{url_for('static', filename = 'LOGOTYPE_MAP.ico')}}">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css" />
+  <link rel="stylesheet" href="https://public.codepenassets.com/css/normalize-5.0.0.min.css">
+  <link rel='stylesheet' href='//ajax.googleapis.com/ajax/libs/jqueryui/1.11.2/themes/smoothness/jquery-ui.css'>
+  <link rel="stylesheet" href="{{url_for('static', filename = 'labelManagement.css')}}">
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.1/css/bootstrap.min.css" />
+
+  <script>
+    var labels = {{ labels | tojson | safe }};
+    window.onload = function() {
+      var $root = $('#categorized-labels');
+      buildLabelTree(labels["classifiées"], $root);
+    };
+  </script>
+
+
 </head>
 <body>
-    <h1>Gestion des étiquettes</h1>
-    
+<!-- partial:index.partial.html -->
+<section style="padding: 10px;">
+
+  <h1>Gérer les étiquettes</h1>
+
+  <button id="addLabelBtn" class="btn btn-primary">Ajouter une étiquette</button>
+  <button id="addTitleBtn" class="btn btn-primary">Ajouter un titre</button>
+
+  <ul id="dragRoot">
+
+    <li id="uncategorized-labels"><i class="icon-building" ></i> <span class="node-facility non-editable">Etiquettes non classées</span>
+      <ul>
+        {% for label in labels['non_classifiées'].keys() %}
+        <li><i class="icon-hdd"></i> <span class="node-cpe">{{ label }}</span></li>
+        {% endfor %}
+      </ul>
+    </li>
+
+    <li id="categorized-labels"><i class="icon-building"></i> <span class="node-facility non-editable">Etiquettes classées</span>
+      
+    </li>
+  </ul>
+
+</section>
+
+<section>
+  <!-- Configuration Modal -->
+  <div class="modal fade" id="labelConfigModal" tabindex="-1" role="dialog" aria-labelledby="labelConfigModalLabel">
+    <div class="modal-dialog" role="document">
+      <div class="modal-content">
+        <form id="labelConfigForm">
+          <div class="modal-header">
+            <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+            <h4 class="modal-title" id="labelConfigModalLabel">Configurer l'étiquette</h4>
+          </div>
+          <div class="modal-body">
+            <div class="form-group">
+              <label for="labelName">Nom de l'étiquette</label>
+              <input type="text" class="form-control" id="labelName" name="labelName" required>
+            </div>
+            <div class="form-group">
+              <label for="labelColor">Couleur</label>
+              <input type="color" class="form-control" id="labelColor" name="labelColor">
+            </div>
+            <!-- Ajoutez d'autres champs de configuration ici si nécessaire -->
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-default" data-dismiss="modal">Annuler</button>
+            <button type="submit" class="btn btn-primary">Enregistrer</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</section>
+
+<button id="saveLabelBtn">Enregistrer</button>
+
+<!-- partial -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.3/jquery.min.js"></script>
+<script src="https://ajax.googleapis.com/ajax/libs/jqueryui/1.11.2/jquery-ui.min.js"></script>
+<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.1/js/bootstrap.min.js"></script>
+<script src="{{url_for('static', filename = 'labelManagement.js')}}"></script>
+
 </body>
 </html>
+
+
+
+
+
+
+
+
+
+
+
+

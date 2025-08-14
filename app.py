@@ -224,3 +224,18 @@ def addColumn():
 
 if __name__ == '__main__':
    app.run()
+
+@app.route('/manageLabels')
+def manageLabels():
+    return render_template('labelManagement.html', labels=cache["Etiquettes"]["liste des étiquettes"])
+
+@app.route('/save-labels', methods=['POST'])
+def save_labels():
+    global cache
+    data = request.get_json()
+    if data is not None:
+        cache["Etiquettes"]["liste des étiquettes"] = data
+        with open("cache.json", "w", encoding='utf-8') as fp:
+            json.dump(cache, fp, ensure_ascii=False)
+        return '', 204
+    return '', 404
