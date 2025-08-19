@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, make_response, redirect, url_for
+from flask import Flask, render_template, request, make_response, redirect, url_for, jsonify
 
 import requests as req
 from flask_wtf import FlaskForm
@@ -8,7 +8,7 @@ from wtforms.validators import InputRequired
 import json
 from flask_wtf.csrf import generate_csrf
 
-import gestionDB
+import gestionDB # functions related to the data display and data management
 
 
 app = Flask(__name__)
@@ -18,12 +18,10 @@ cache = {}
 with open("cache.json", "r", encoding='utf-8') as fp:
     cache = json.load(fp)
 
-DBs = [[]]
 
 @app.route('/')
 def index():
-    DBs = [[]]
-    return render_template('index.html', list=DBs)
+    return render_template('index.html')
 
 class LoginForm(FlaskForm):
     name = StringField('Name', validators=[InputRequired()])
@@ -147,7 +145,15 @@ def render(db):
     form = AddRowForm()
     ColNotToShow = cache["Affichage"][current_df_name]["Colonnes en détails"] if current_df_name in cache["Affichage"] else []
     full_columns_names = gestionDB.get_column_names(current_df, full = True)
-    return render_template('gestionDB.html', df=gestionDB.df_to_html(current_df, ColNotToShow), columns=columns, form=form, full_columns=full_columns_names)
+    attached_labels = []
+    for key, label in cache["Etiquettes"]["liste des étiquettes"]["classifiées"].items():
+        for item in label["attachedDataframes"]:
+            if item == current_df_name:
+                attached_labels.append(key)
+    
+    if ("","", "Etiquettes") not in current_df.columns:
+        current_df[("","", "Etiquettes")] = "" #[[] for _ in range(current_df.shape[0])]
+    return render_template('gestionDB.html', df=gestionDB.df_to_html(current_df, ColNotToShow), columns=columns, form=form, full_columns=full_columns_names, attachedLabels=attached_labels)
 
 
 class AddRowForm(FlaskForm):
@@ -227,7 +233,7 @@ if __name__ == '__main__':
 
 @app.route('/manageLabels')
 def manageLabels():
-    return render_template('labelManagement.html', labels=cache["Etiquettes"]["liste des étiquettes"])
+    return render_template('labelManagement.html', labels=cache["Etiquettes"]["liste des étiquettes"], dataframes=cache["Paramètres"]["URL des fichiers de la base de données"].keys())
 
 @app.route('/save-labels', methods=['POST'])
 def save_labels():
@@ -239,3 +245,35 @@ def save_labels():
             json.dump(cache, fp, ensure_ascii=False)
         return '', 204
     return '', 404
+
+@app.route('/save-label-attribution', methods=['POST'])
+def save_label_attribution():
+    global cache
+    data = request.get_json()
+    if data is not None:
+        cache["Etiquettes"]["attribution des étiquettes"] = data
+        with open("cache.json", "w", encoding='utf-8') as fp:
+            json.dump(cache, fp, ensure_ascii=False)
+        return '', 204
+    return '', 404
+
+@app.route('/saveLabelAttribution', methods=['POST'])
+def saveLabelAttribution():
+    global cache
+    global current_df
+    data = request.get_json()
+    rowID = data.get("rowID")
+    labels = data.get("labels", [])
+    print("XXXXX"*60)
+    print(rowID, labels)
+    if data is not None:
+        current_df.at[int(rowID), ("", "", "Etiquettes")] = labels
+    print(current_df[("", "", "Etiquettes")].head())
+    return '', 204
+
+@app.route('/getLabelsForRow/<rowID>')
+def getLabelsForRow(rowID):
+    global current_df
+    df = current_df
+    labels = df[("","", "Etiquettes")].iloc[int(rowID)]
+    return jsonify({"labels": labels}), 200

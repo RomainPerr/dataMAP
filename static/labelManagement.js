@@ -4,7 +4,7 @@
 function buildLabelTree(labels, $root, roots) {
   function createNode(label, data) {
     var $li = $('<li></li>');
-    var $span = $('<span class="node-cpe"></span>').text(label).css({color: data.color});
+    var $span = $('<span class="node-cpe"></span>').text(label).css({color: data.color}).data('attachedDataframes', data.attachedDataframes);
     $li.append('<i class="icon-tag"></i> ').append($span);
     if (data.children && data.children.length > 0) {
       var $ul = $('<ul></ul>');
@@ -249,9 +249,10 @@ $(document).ready(function() {
 $(document).ready(function () {
   DragAndDrop.enable("#dragRoot");
   
-  $(document).on("dblclick", "#dragRoot *[class*=node]", function() {
+  $(document).on("dblclick", "#dragRoot *[class*=node]", function(e) {
     if (!$(this).hasClass("non-editable")) {
       $(this).beginEditing();
+      onHoverNode(e, false);
     }
   });
 
@@ -268,6 +269,22 @@ $(document).ready(function () {
     var $label = $(this);
     $('#labelName').val($label.text());
     $('#labelConfigModal').data('labelElement', $label);
+    var attached = $label.data('attachedDataframes') || [];
+    $('#labelAttachedDataframes input[type="checkbox"]').each(function() {
+      var val = $(this).val();
+      $(this).prop('checked', attached.indexOf(val) !== -1);
+    });
+    // Set the color input to the current label color, converting from rgb to hex if needed
+    function rgb2hex(rgb) {
+      if (!rgb) return '#000000';
+      var result = rgb.match(/\d+/g);
+      if (!result) return '#000000';
+      return "#" + result.slice(0, 3).map(function(x) {
+        var hex = parseInt(x).toString(16);
+        return hex.length == 1 ? "0" + hex : hex;
+      }).join('');
+    }
+    $('#labelColor').val(rgb2hex($label.css('color')));
     $('#labelConfigModal').modal('show');
   });
 
@@ -287,6 +304,7 @@ $(document).ready(function () {
   });
   $(document).on("click", "#saveLabelBtn", function() {
     saveLabelParameters();
+    saveLabelAttribution();
   });
   $(document).on("click", "#deleteLabel", function() {
     var $label = $('#labelConfigModal').data('labelElement');
@@ -295,6 +313,33 @@ $(document).ready(function () {
   });
   $(document).on("click", "#duplicateLabel", function() {
     duplicateLabel()
+  });
+  $(document).on("mouseenter", "#dragRoot .node-cpe", function(e) {
+    onHoverNode(e, true);
+  });
+  $(document).on("mouseleave", "#dragRoot .node-cpe", function(e) {
+    onHoverNode(e, false);
+  });
+  $(document).on("click", "#labelAttributionButton", function() {
+    // For each dataframe column, check the box if the label is in the dataframe's attached labels
+    $('#labelAttributionForm input[type="checkbox"]').each(function() {
+      var $checkbox = $(this);
+      var labelName = $checkbox.val();
+      var dataframe = $checkbox.attr('name').replace(/^attribution_/, '').replace(/\[\]$/, '');
+      // Find the label element in the DOM to get its attachedDataframes
+      var $labelElem = $('#dragRoot *[class*=node]').filter(function() {
+        return $(this).text() === labelName;
+      }).first();
+      var attached = $labelElem.data('attachedDataframes') || [];
+      $checkbox.prop('checked', attached.indexOf(dataframe) !== -1);
+    });
+
+    $('#labelAttributionModal').modal('show');
+
+  });
+  $(document).on("submit", "#labelAttributionForm", function(e) {
+    e.preventDefault();
+    saveLabelAttribution();
   });
 
 });
@@ -323,7 +368,6 @@ function addTitle(){
 
 function saveLabelOptions(){
   var $label = $('#labelConfigModal').data('labelElement');
-  // get all labels with same name as the current label
   var sameLabel=[];
   var labelName = $label.text();
   var newLabelName = $('#labelName').val();
@@ -402,7 +446,12 @@ function saveLabelOptions(){
   for (var i = 0; i < sameLabel.length; i++) {
     sameLabel[i].text($('#labelName').val());
     sameLabel[i].css('color', $('#labelColor').val());
+    sameLabel[i].data('attachedDataframes', $('#labelAttachedDataframes input:checked').map(function() {
+      return $(this).val();
+    }).get());
   }
+
+
   $('#labelConfigModal').modal('hide');
 }
 
@@ -427,7 +476,8 @@ function saveLabelParameters() {
   $('#uncategorized-labels .node-cpe').each(function() {
     var $label = $(this);
     dic.non_classifiées[$label.text()] = {
-      color: $label.css('color')
+      color: $label.css('color'),
+      attachedDataframes: $label.data('attachedDataframes') || []
     };
   });
   console.log(dic);
@@ -441,7 +491,8 @@ function saveLabelParameters() {
     });
     dic.classifiées[$label.text()] = {
       children: children,
-      color: $label.css('color')
+      color: $label.css('color'),
+      attachedDataframes: $label.data('attachedDataframes') || []
     };
   });
 
@@ -472,6 +523,48 @@ function duplicateLabel() {
   var $label = $('#labelConfigModal').data('labelElement');
   var $newLabel = $('<li></li>').append($label.clone());
   DragAndDrop.enable($newLabel);
-  $label.closest('li').after($newLabel);
+  $("#uncategorized-labels > ul").append($newLabel);
   $('#labelConfigModal').modal('hide');
+}
+
+function onHoverNode(e, hovered){
+  var $target = $(e.currentTarget);
+  if (!hovered) {
+    $('#dragRoot *[class*=node]').filter(function() {
+      if ($(this).text() === $target.text()) {
+        return $(this).removeClass("hovered");
+      }
+    });
+  } else {
+    $('#dragRoot *[class*=node]').filter(function() {
+      
+      if ($(this).text() === $target.text()) {
+        return $(this).addClass("hovered");
+      }
+    });
+  }
+}
+
+function saveLabelAttribution(){
+  var data = {};
+  $('#labelAttributionForm').serializeArray().forEach(function(item) {
+    if (!data[item.name]) {
+      data[item.name] = [];
+    }
+    data[item.name].push(item.value);
+  });
+
+  $('#dragRoot *[class*=node]').each(function() {
+    var $label = $(this);
+    var labelName = $label.text();
+    var attached = [];
+    for (var key in data) {
+      if (data[key].indexOf(labelName) !== -1) {
+        attached.push(key.replace(/^attribution_/, '').replace(/\[\]$/, ''));
+      }
+    }
+    $label.data('attachedDataframes', attached);
+  });
+  
+  $('#labelAttributionModal').modal('hide');
 }

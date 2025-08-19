@@ -69,7 +69,9 @@ def df_to_html(df, ColNotToShow):
         df_toshow = df.drop(columns=nom_cols, errors='ignore')
     else:
         df_toshow = df.drop(columns=ColNotToShow, errors='ignore')
-    
+
+    df_toshow = df_toshow.drop(columns=[("","", "Etiquettes")], errors='ignore')
+
     df_toshow = df_toshow.reset_index()
     df_toshow = df_toshow.to_html(classes='table table-striped', index=False)
 
@@ -130,6 +132,21 @@ def df_to_html(df, ColNotToShow):
             button.string = "Supprimer"
             del_td.append(button)
             row.append(del_td)
+
+            label_td = soup.new_tag("td")
+            # Get the row index (first cell value)
+            
+            button = soup.new_tag(
+                "button",
+                **{
+                    "class": "btn btn-secondary",
+                    "type": "button",
+                    "onclick": f"openLabelsModal('{row_ID}')"
+                }
+            )
+            button.string = "Étiquettes"
+            label_td.append(button)
+            row.append(label_td)
             
     df_toshow = str(soup)
     return df_toshow

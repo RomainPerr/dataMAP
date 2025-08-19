@@ -9,6 +9,7 @@
             h1 { color: green; }
             .error { color: red; }
         </style>
+        <script src="{{ url_for('static', filename='gestionDB.js') }}"></script>
     </head>
 
     <body>
@@ -285,6 +286,26 @@
                     });
             }
         </script>
+
+        <div style="display: flex; justify-content: center; align-items: center; min-height: 60vh;"></div>
+            <div id="labelsModal" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.5); align-items:center; justify-content:center; z-index:1000; overflow:auto;">
+            <div style="background:white; padding:20px; border-radius:8px; min-width:400px; max-height:90vh; overflow:auto;">
+                <h2>Gestion des étiquettes</h2>
+                <form id="labelsForm">
+                    <input type="hidden" name="rowID" value="{{ rowID }}">
+                    {% for label in attachedLabels %}
+                        <div style="margin-bottom: 8px;">
+                            <input type="checkbox" id="label_{{ loop.index }}" name="labels" value="{{ label }}">
+                            <label for="label_{{ loop.index }}">{{ label }}</label>
+                        </div>
+                    {% endfor %}
+
+                    <button type="button" onclick="closeLabelsModal()">Fermer</button>
+                    <button type="submit" class="btn" onclick="saveLabelAttribution()">Valider</button>
+                </form>
+            </div>
+            </div>
+        </div>
         
         
     </body>

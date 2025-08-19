@@ -35,7 +35,7 @@
       <ul>
         {% if labels['non_classifiées'] %}
         {% for label in labels['non_classifiées'].keys() %}
-        <li><i class="icon-hdd"></i> <span class="node-cpe">{{ label }}</span></li>
+        <li><i class="icon-hdd"></i> <span class="node-cpe" style="color: {{ labels['non_classifiées'][label].color }}" data-attached-dataframes="{{ labels['non_classifiées'][label].attachedDataframes }}">{{ label }}</span></li>
         {% endfor %}
         {% endif %}
       </ul>
@@ -67,6 +67,19 @@
               <label for="labelColor">Couleur</label>
               <input type="color" class="form-control" id="labelColor" name="labelColor">
             </div>
+            <div class="form-group">
+              <label for="labelAttachedDataframes">Bases de données associées</label>
+                <div id="labelAttachedDataframes" style="max-height: 180px; overflow-y: auto;">
+                {% for dataframe in dataframes %}
+                  <div class="checkbox">
+                  <label>
+                    <input type="checkbox" name="labelAttachedDataframes[]" value="{{ dataframe }}">
+                    {{ dataframe }}
+                  </label>
+                  </div>
+                {% endfor %}
+                </div>
+            </div>
             <!-- Ajoutez d'autres champs de configuration ici si nécessaire -->
           </div>
           <div class="modal-footer">
@@ -83,7 +96,54 @@
   </div>
 </section>
 
+
+<!-- Modal attribution des étiquettes -->
+
+<section>
+  <!-- Modal attribution des étiquettes -->
+  <div class="modal fade" id="labelAttributionModal" tabindex="-1" role="dialog" data-backdrop="static" aria-labelledby="labelAttributionModalLabel">
+    <div class="modal-dialog" role="document">
+      <div class="modal-content">
+        <form id="labelAttributionForm">
+          <div class="modal-header">
+            <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+            <h4 class="modal-title" id="labelAttributionModalLabel">Attribuer les étiquettes</h4>
+          </div>
+          <div class="modal-body">
+            <div class="row">
+              {% for dataframe in dataframes %}
+                <div class="col-md-{{ 12 // dataframes|length }}">
+                  <div class="form-group">
+                    <label>{{ dataframe }}</label>
+                    <div style="max-height: 250px; overflow-y: auto;">
+                        {% set all_labels = (labels["classifiées"].keys() | list + labels["non_classifiées"].keys() | list) | unique %}
+                        {% for label in all_labels %}
+                        <div class="checkbox">
+                          <label>
+                            <input type="checkbox" name="attribution_{{ dataframe }}[]" value="{{ label }}">
+                            {{ label }}
+                          </label>
+                        </div>
+                      {% endfor %}
+                    </div>
+                  </div>
+                </div>
+              {% endfor %}
+            </div>
+            <!-- Ajoutez d'autres champs de configuration ici si nécessaire -->
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-default" data-dismiss="modal">Annuler</button>
+            <button type="submit" class="btn btn-primary">Enregistrer</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</section>
+
 <button id="saveLabelBtn">Enregistrer</button>
+<button id="labelAttributionButton">Attribuer les étiquettes</button>
 
 <a href="{{ url_for('index') }}"><button>Retour à l'index</button></a>
 
