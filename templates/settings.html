@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login</title>
+    <title>dataMAP - Paramètres</title>
     <style>
         h1 { color: green; }
         .error { color: red; }
@@ -16,7 +16,7 @@
     <h2>Emplacements des fichiers de base de données</h2>
     <ul>
         {% for category, entries in cache.items() %}
-            {% if entries is mapping %}
+            {% if entries is mapping %} <!-- if the parameter is a dictionnary, sub-entries can be deleted -->
             <li>{{ category}}
             <ul>
             {% for key, value in entries.items() %}
@@ -45,14 +45,14 @@
                     {{ form.csrf_token }}
                     {{ form.hidden_tag() }}
                     <input type="hidden" name="category" value="{{ category }}">
-                    <input type="text" name="key" placeholder="Nom" required>
-                    <input type="text" name="value" placeholder="Valeur" required>
+                    <input type="text" name="key" placeholder="Nom de la base de données" required>
+                    <input type="text" name="value" placeholder="URL (ajouter /download à la fin de l'adresse de partage du cloud)" required>
                     <button type="submit">Ajouter</button>
                 </form>
             </li>
             </ul>
 
-            {% elif entries is string %}
+            {% elif entries is string %} <!-- if the parameter is a string, the content can be edited but the parameter cannot be deleted -->
             <li>
                 {{ category }}: 
                 <button type="button" onclick="toggleOptions('{{ category }}', '{{ category }}')">{{ entries }}</button>

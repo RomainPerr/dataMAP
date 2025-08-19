@@ -6,20 +6,7 @@ from IPython.display import HTML
 from bs4 import BeautifulSoup
 import json
 
-label_rows_number = 3
-
-df = pd.read_excel('03_DB_MAP_Politiques.xlsx', 
-                   header=[i for i in range(label_rows_number)], 
-                   index_col=0, 
-                   sheet_name="Politiques")
-
-new_columns = []
-for col in df.columns:
-    col0 = "" if "Unnamed" in col[0] else col[0]
-    col1 = "" if "Unnamed" in col[1] else col[1]
-    col2 = "" if "Unnamed" in col[2] else col[2]
-    new_columns.append((col0, col1, col2))
-df.columns = pd.MultiIndex.from_tuples(new_columns)
+label_rows_number = 3 # Number of header rows in the Excel file, not really modifiable as is for addColumn() assumes 3
 
 def read_df(file_path, name, pwd, label_rows_number=3):
 
@@ -59,6 +46,7 @@ def filter_df_by_column(df, column_name, value):
     return df[df[column_name].str.contains(value, na=False)]
 
 
+# Function to convert DataFrame to HTML shown in gestionDB.html
 def df_to_html(df, ColNotToShow):
     df = df.fillna('')
     if isinstance(df.columns, pd.MultiIndex):
@@ -75,7 +63,7 @@ def df_to_html(df, ColNotToShow):
     df_toshow = df_toshow.reset_index()
     df_toshow = df_toshow.to_html(classes='table table-striped', index=False)
 
-    # Add an action button at the end of each row
+    # Add buttons at the end of each row/at the beginning of each column
 
     soup = BeautifulSoup(df_toshow, "html.parser")
     table = soup.find("table")
@@ -102,9 +90,8 @@ def df_to_html(df, ColNotToShow):
                     btn.string = "Supprimer"
                     th.append(btn)
 
-        # Add a button to each data row (skip header)
         for row in table.find_all("tr")[3:]:
-            action_td = soup.new_tag("td")
+            details_td = soup.new_tag("td") # Cell for "détails" button
             row_ID = row.find_all("td")[0].get_text(strip=True)
             button = soup.new_tag(
                 "button", 
@@ -115,12 +102,10 @@ def df_to_html(df, ColNotToShow):
                     }
             )
             button.string = "Détails"
-            action_td.append(button)
-            row.append(action_td)
+            details_td.append(button)
+            row.append(details_td)
 
-            del_td = soup.new_tag("td")
-            # Get the row index (first cell value)
-            
+            del_td = soup.new_tag("td") # cell for "supprimer" button
             button = soup.new_tag(
                 "button",
                 **{
@@ -133,8 +118,7 @@ def df_to_html(df, ColNotToShow):
             del_td.append(button)
             row.append(del_td)
 
-            label_td = soup.new_tag("td")
-            # Get the row index (first cell value)
+            label_td = soup.new_tag("td") # Cell for "étiquettes" button
             
             button = soup.new_tag(
                 "button",
@@ -175,7 +159,7 @@ def get_column_names(df, full=False):
         print("No df to handle")
         return []
 
-def row_columns_to_dict(df, rowID, raw_columns):
+def row_columns_to_dict(df, rowID, raw_columns): #convert to dictionnary for the "détails" modal to show
     if df is not None:
         row = df.iloc[int(rowID)]
         if row is not None:
@@ -218,6 +202,7 @@ def add_column(df, request):
             titles.insert(titles.index(col[0])+1, col[0])
     df = df.reindex(columns=columns)
 
+    # reorganize columns to join same first and second level titles
     titles = []
     columns = []
     for col in df.columns:

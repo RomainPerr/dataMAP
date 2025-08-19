@@ -39,16 +39,6 @@ def make_loginform():
         return resp
     return render_template('loginForm.html', form=form)
 
-@app.route('/getname')
-def getname():
-    NAME = request.cookies.get('name')
-    if NAME is None:
-        return 'No name cookie found'
-    return 'login : ' + NAME + ' password : ' + request.cookies.get('pwd')
-
-
-
-
 
 @app.route('/settings')
 def settings():
@@ -60,19 +50,21 @@ class AddEntryForm(FlaskForm):
     key = StringField('Name', validators=[InputRequired()])
     value = PasswordField('Password', validators=[InputRequired()])
 
+
+#generic functions ton handle parameters : new parameters can be entered in the cache.json 
+# file and will be reflected in the application automatically
 @app.route('/addEntry', methods=['GET', 'POST'])
-def addEntry():
+def addEntry(): 
     form = AddEntryForm()
     if form.validate_on_submit():
-        category = form.category.data
+        category = form.category.data # the parameter being worked with
         key = form.key.data
         value = form.value.data
         if key and value:
             cache["Paramètres"][category][key] = value
             with open("cache.json", "w", encoding='utf-8') as fp:
                 json.dump(cache, fp, ensure_ascii=False)
-        return redirect(url_for('settings'))
-    return render_template('settings.html', cache=cache["Paramètres"], csrf_token=generate_csrf(), form=form)
+    return redirect(url_for('settings'))
 
 @app.route('/deleteEntry', methods=['POST'])
 def deleteEntry():
@@ -115,10 +107,12 @@ def editEntry():
 def menuDB():
     return render_template('menuDB.html', cache=cache["Paramètres"])
 
+#global variables which work as short term memory : they are used instead of reloading 
+# the databases as long as the user is working with the same database
 current_df = None
 current_df_name = None
 
-@app.route('/gestionDB')
+@app.route('/gestionDB') #auto-reload without specifying database, it will use the current_df_name
 def auto_render():
     return redirect(url_for('render', db=current_df_name if current_df_name else 'pas de base de données spécifiée'))
 
@@ -139,23 +133,25 @@ def render(db):
         current_df = df
         current_df.reset_index(drop=True, inplace=True)
         current_df_name = db
-        if cache["Affichage"].get(current_df_name) is None:
+        if cache["Affichage"].get(current_df_name) is None: #Affichage refers to the display settings for the current database, ie which columns are shown and which are "en détails"
             cache["Affichage"][current_df_name] = {"Colonnes en détails": []}
     columns = gestionDB.get_column_names(current_df, full=False)
     form = AddRowForm()
     ColNotToShow = cache["Affichage"][current_df_name]["Colonnes en détails"] if current_df_name in cache["Affichage"] else []
-    full_columns_names = gestionDB.get_column_names(current_df, full = True)
-    attached_labels = []
+    all_columns_names = gestionDB.get_column_names(current_df, full = True)
+    attached_labels = [] # crawling all labels to see which ones are attached to the current dataframe
     for key, label in cache["Etiquettes"]["liste des étiquettes"]["classifiées"].items():
         for item in label["attachedDataframes"]:
             if item == current_df_name:
                 attached_labels.append(key)
     
-    if ("","", "Etiquettes") not in current_df.columns:
-        current_df[("","", "Etiquettes")] = "" #[[] for _ in range(current_df.shape[0])]
-    return render_template('gestionDB.html', df=gestionDB.df_to_html(current_df, ColNotToShow), columns=columns, form=form, full_columns=full_columns_names, attachedLabels=attached_labels)
+    if ("","", "Etiquettes") not in current_df.columns: #if labels columns does not exist yet, create it
+        current_df[("","", "Etiquettes")] = ""
+
+    return render_template('gestionDB.html', df=gestionDB.df_to_html(current_df, ColNotToShow), columns=columns, form=form, full_columns=all_columns_names, attachedLabels=attached_labels)
 
 
+# Functions used in gestionDB.html
 class AddRowForm(FlaskForm):
     global current_df
     db = StringField('db')
@@ -188,9 +184,7 @@ def deleteRow():
     columns = gestionDB.get_column_names(df)
     return '', 200
 
-
-
-
+# the columns which are not shown, the data is available when the "détails" button is clicked
 @app.route('/rowDetails/<rowID>')
 def rowDetails(rowID):
     global current_df
@@ -231,6 +225,8 @@ def addColumn():
 if __name__ == '__main__':
    app.run()
 
+
+# Function used in labelManagement.html
 @app.route('/manageLabels')
 def manageLabels():
     return render_template('labelManagement.html', labels=cache["Etiquettes"]["liste des étiquettes"], dataframes=cache["Paramètres"]["URL des fichiers de la base de données"].keys())

@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8">
-  <title>Gérer les étiquettes</title>
+  <title>dataMAP - étiquettes</title>
   <link rel="icon" type="image/x-icon" href="{{url_for('static', filename = 'LOGOTYPE_MAP.ico')}}">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css" />
   <link rel="stylesheet" href="https://public.codepenassets.com/css/normalize-5.0.0.min.css">
@@ -11,17 +11,12 @@
   <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.1/css/bootstrap.min.css" />
 
   <script>
-    var labels = {{ labels | tojson | safe }};
-    window.onload = function() {
-      var $root = $('#categorized-labels');
-      buildLabelTree(labels["classifiées"], $root, labels["racine_classifiées"]);
-    };
+    var labels = {{ labels | tojson | safe }}; // not a true error, just Flask code not recognized by VS Code
   </script>
 
 
 </head>
 <body>
-<!-- partial:index.partial.html -->
 <section style="padding: 10px;">
 
   <h1>Gérer les étiquettes</h1>
@@ -31,15 +26,7 @@
 
   <ul id="dragRoot">
 
-    <li id="uncategorized-labels"><i class="icon-building" ></i> <span class="node-facility non-editable">Etiquettes non classées</span>
-      <ul>
-        {% if labels['non_classifiées'] %}
-        {% for label in labels['non_classifiées'].keys() %}
-        <li><i class="icon-hdd"></i> <span class="node-cpe" style="color: {{ labels['non_classifiées'][label].color }}" data-attached-dataframes="{{ labels['non_classifiées'][label].attachedDataframes }}">{{ label }}</span></li>
-        {% endfor %}
-        {% endif %}
-      </ul>
-    </li>
+    <li id="uncategorized-labels"><i class="icon-building" ></i> <span class="node-facility non-editable">Etiquettes non classées</span></li>
 
     <li id="categorized-labels"><i class="icon-building"></i> <span class="node-facility non-editable">Etiquettes classées</span>
       
@@ -80,7 +67,6 @@
                 {% endfor %}
                 </div>
             </div>
-            <!-- Ajoutez d'autres champs de configuration ici si nécessaire -->
           </div>
           <div class="modal-footer">
             <div class="pull-left">
@@ -97,10 +83,9 @@
 </section>
 
 
-<!-- Modal attribution des étiquettes -->
+<!-- Modal d'attribution des étiquettes -->
 
 <section>
-  <!-- Modal attribution des étiquettes -->
   <div class="modal fade" id="labelAttributionModal" tabindex="-1" role="dialog" data-backdrop="static" aria-labelledby="labelAttributionModalLabel">
     <div class="modal-dialog" role="document">
       <div class="modal-content">
@@ -130,7 +115,6 @@
                 </div>
               {% endfor %}
             </div>
-            <!-- Ajoutez d'autres champs de configuration ici si nécessaire -->
           </div>
           <div class="modal-footer">
             <button type="button" class="btn btn-default" data-dismiss="modal">Annuler</button>
@@ -147,7 +131,6 @@
 
 <a href="{{ url_for('index') }}"><button>Retour à l'index</button></a>
 
-<!-- partial -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.3/jquery.min.js"></script>
 <script src="https://ajax.googleapis.com/ajax/libs/jqueryui/1.11.2/jquery-ui.min.js"></script>
 <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.1/js/bootstrap.min.js"></script>

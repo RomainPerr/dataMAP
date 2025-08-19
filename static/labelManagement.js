@@ -1,12 +1,36 @@
+// LOADING OF THE PAGE
 
+window.onload = function() {
+  var $root = $('#categorized-labels');
+  buildLabelTree(labels["classifiées"], $root, labels["racine_classifiées"], isClassified = true);
+  $root = $('#uncategorized-labels');
+  buildLabelTree(labels["non_classifiées"], $root, labels["racine_non_classifiées"], isClassified = false);
+};
 
+function initToggle($ul){
+  if ($ul.children('li').length > 0) {
+    var $toggle = $('<span class="toggle-children" style="cursor:pointer; margin-right:4px;" title="Afficher/masquer les descendants">[–]</span>');
+    $ul.prepend($toggle);
 
-function buildLabelTree(labels, $root, roots) {
+    $toggle.on('click', function(e) {
+      e.stopPropagation();
+      $ul.toggle();
+      $toggle.text($ul.is(':visible') ? '[–]' : '[+]');
+    });
+  }
+}
+
+function buildLabelTree(labels, $root, roots, isClassified) {
   function createNode(label, data) {
     var $li = $('<li></li>');
     var $span = $('<span class="node-cpe"></span>').text(label).css({color: data.color}).data('attachedDataframes', data.attachedDataframes);
     $li.append('<i class="icon-tag"></i> ').append($span);
-    if (data.children && data.children.length > 0) {
+
+    // Add show/hide toggle if there are children
+    if (data.children && data.children.length > 0 && isClassified) {
+      var $toggle = $('<span class="toggle-children" style="cursor:pointer; margin-right:4px;" title="Afficher/masquer les descendants">[–]</span>');
+      $li.prepend($toggle);
+
       var $ul = $('<ul></ul>');
       data.children.forEach(function(child) {
         if (labels[child]) {
@@ -15,12 +39,30 @@ function buildLabelTree(labels, $root, roots) {
           // fallback for orphan child
           $ul.append('<li><i class="icon-tag"></i> <span class="node-cpe">' + child + '</span></li>');
         }
+        
       });
       $li.append($ul);
+
+      if (data.isDescendantsHidden === "true") {
+        // Les descendants sont masqués
+        $ul.hide();
+        $toggle.text('[+]');
+        $span.attr('data-descendants-hidden', true);
+      }
+
+      // Toggle handler
+      $toggle.on('click', function(e) {
+        e.stopPropagation();
+        var $this = $(this);
+        $ul.toggle();
+        $this.text($ul.is(':visible') ? '[–]' : '[+]');
+        $span.attr('data-descendants-hidden', !$ul.is(':visible'));
+      });
     }
     return $li;
   }
 
+  $root.append($('<ul></ul>'));
   Object.keys(labels).forEach(function(label) {
     // Only add root nodes (not children of any other label)
     var isChild = false;
@@ -28,7 +70,7 @@ function buildLabelTree(labels, $root, roots) {
       isChild = true;
     }
     if (!isChild) {
-      $root.append($('<ul></ul>').append(createNode(label, labels[label])));
+      $root.children("ul").append(createNode(label, labels[label]));
     }
   });
 
@@ -37,6 +79,16 @@ function buildLabelTree(labels, $root, roots) {
     window.DragAndDrop.enable($root);
   }
 }
+
+
+
+
+
+
+
+
+
+
 
 
 // Ensure DragAndDrop is defined and available after page load
@@ -116,9 +168,70 @@ $(document).ready(function() {
           }
 
           $item.slideUp(50, function() {
-
             $dstUL.append($item);
-    
+            if ($target.children('.toggle-children').length === 0 && $dstUL.children('li').length > 0) {
+              var $toggle = $('<span class="toggle-children" style="cursor:pointer; margin-right:4px;" title="Afficher/masquer les descendants">[–]</span>');
+              $target.prepend($toggle);
+              $toggle.on('click', function(e) {
+                e.stopPropagation();
+                $dstUL.toggle();
+                $toggle.text($dstUL.is(':visible') ? '[–]' : '[+]');
+                $target.children('.node-cpe, .node-facility').first().attr('data-descendants-hidden', !$dstUL.is(':visible'));
+              });
+            }
+            $('#dragRoot *[class*=node]').filter(function() {
+                return $(this).text() === $target.find(".node-cpe, .node-facility").first().text() && this !== $target.find(".node-cpe, .node-facility").first()[0];
+            }).each(function() {
+              
+              var $labelLi = $(this).closest("li");
+              if ($labelLi[0] !== $item[0]) {
+                var $labelUl = $labelLi.children("ul").first();
+                if ($labelUl.length === 0) {
+                  $labelUl = $("<ul></ul>");
+                  $labelLi.append($labelUl);
+                }
+                var $clonedItem = $item.clone(false, false).show();
+                DragAndDrop.enable($clonedItem);
+                $labelUl.append($clonedItem);
+                if ($labelLi.children('.toggle-children').length === 0 && $labelUl.children('li').length > 0) {
+                  var $toggle = $('<span class="toggle-children" style="cursor:pointer; margin-right:4px;" title="Afficher/masquer les descendants">[–]</span>');
+                  $labelLi.prepend($toggle);
+                  $toggle.on('click', function(e) {
+                    e.stopPropagation();
+                    $labelUl.toggle();
+                    $toggle.text($labelUl.is(':visible') ? '[–]' : '[+]');
+                    $labelLi.children('.node-cpe, .node-facility').first().attr('data-descendants-hidden', !$labelUl.is(':visible'));
+                  });
+                }
+                
+              }
+            });
+
+            // Remove all children named as the moved label from all parents named as the original parent, except the moved item itself
+            var srcParentLabelName = $srcUL.parent().closest('li').children('.node-cpe, .node-facility').first().text().trim();
+            var movedLabelName = $item.find('.node-cpe, .node-facility').first().text().trim();
+
+            $('#dragRoot li').each(function() {
+              var $li = $(this);
+              var $parentLabel = $li.children('.node-cpe, .node-facility').first();
+              if ($parentLabel.length && $parentLabel.text().trim() === srcParentLabelName) {
+              $li.children('ul').children('li').each(function() {
+                var $childLi = $(this);
+                var $childLabel = $childLi.children('.node-cpe, .node-facility').first();
+                if (
+                $childLabel.length &&
+                $childLabel.text().trim() === movedLabelName &&
+                $childLi[0] !== $item[0]
+                ) {
+                  $childLi.remove();
+                  if ($childLi.parent().children().length === 0) {
+                    $childLi.parent().remove();
+                  }
+                }
+              });
+              }
+            });
+
             if ($srcUL.children("li").length == 0) {
                 $srcUL.remove();
             }
@@ -221,6 +334,27 @@ $(document).ready(function() {
         $.each(ref.data(), function(key, value) {
           $node.data(key, value);
         });
+        var $refLi = ref.closest('li');
+        var $refUl = $refLi.children('ul').first();
+        if ($refUl.length) {
+          // Remove existing children ul
+          $li.children('ul').remove();
+          // Clone and append the ul
+          var $clonedUl = $refUl.clone(false, false);
+          DragAndDrop.enable($clonedUl);
+          $li.append($clonedUl);
+          // Add toggle if not present
+          if ($li.children('.toggle-children').length === 0) {
+            var $toggle = $('<span class="toggle-children" style="cursor:pointer; margin-right:4px;" title="Afficher/masquer les descendants">[–]</span>');
+            $li.prepend($toggle);
+            $toggle.on('click', function(e) {
+              e.stopPropagation();
+              $clonedUl.toggle();
+              $toggle.text($clonedUl.is(':visible') ? '[–]' : '[+]');
+              $node.attr('data-descendants-hidden', !$clonedUl.is(':visible'));
+            });
+          }
+        }
       }
       whenDone($node);
     }
@@ -245,6 +379,9 @@ $(document).ready(function() {
   };
   
 })(jQuery);
+
+
+
 
 $(document).ready(function () {
   DragAndDrop.enable("#dragRoot");
@@ -437,7 +574,7 @@ function saveLabelOptions(){
   sameLabel.push($label); 
 
   if ((sameLabel.length > 1) && (labelName.trim() !== newLabelName.trim())) {
-    if (!window.confirm("All labels with the same name will be modified. Do you want to continue?")) {
+    if (!window.confirm("Toutes les étiquettes avec le même nom seront modifiées. Voulez-vous continuer ?")) {
       $('#labelConfigModal').modal('hide');
       return false;
     }
@@ -449,6 +586,39 @@ function saveLabelOptions(){
     sameLabel[i].data('attachedDataframes', $('#labelAttachedDataframes input:checked').map(function() {
       return $(this).val();
     }).get());
+  }
+
+  if (sameLabel.length > 1) {
+    // Find the first label with the same name (excluding the one being edited)
+    var $first = sameLabel[0];
+    // Copy its children UL (if any) to all other same-named labels (except itself)
+    var $firstUl = $first.closest('li').children('ul').first();
+    if ($firstUl.length) {
+      for (var i = 1; i < sameLabel.length; i++) {
+        var $li = sameLabel[i].closest('li');
+        // Remove existing children ul
+        $li.children('ul').remove();
+        // Clone and append the ul
+        // Deep clone the UL but remove any jQuery event handlers to avoid shared state
+        var $clonedUl = $firstUl.clone(false, false);
+        // Re-enable drag and drop on the new subtree
+        DragAndDrop.enable($clonedUl);
+        $li.append($clonedUl);
+        if ($clonedUl.children('li').length > 0) {
+          // Add toggle if not present
+          if ($li.children('.toggle-children').length === 0) {
+            var $toggle = $('<span class="toggle-children" style="cursor:pointer; margin-right:4px;" title="Afficher/masquer les descendants">[–]</span>');
+            $li.prepend($toggle);
+            $toggle.on('click', function(e) {
+              e.stopPropagation();
+              $clonedUl.toggle();
+              $toggle.text($clonedUl.is(':visible') ? '[–]' : '[+]');
+              sameLabel[i].attr('data-descendants-hidden', !$clonedUl.is(':visible'));
+            });
+          }
+        }
+      }
+    }
   }
 
 
@@ -480,7 +650,6 @@ function saveLabelParameters() {
       attachedDataframes: $label.data('attachedDataframes') || []
     };
   });
-  console.log(dic);
   
   $('#categorized-labels .node-cpe').each(function() {
     var $label = $(this);
@@ -492,7 +661,8 @@ function saveLabelParameters() {
     dic.classifiées[$label.text()] = {
       children: children,
       color: $label.css('color'),
-      attachedDataframes: $label.data('attachedDataframes') || []
+      attachedDataframes: $label.data('attachedDataframes') || [],
+      isDescendantsHidden: $label.attr('data-descendants-hidden')
     };
   });
 
