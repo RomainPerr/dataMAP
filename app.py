@@ -229,14 +229,14 @@ if __name__ == '__main__':
 # Function used in labelManagement.html
 @app.route('/manageLabels')
 def manageLabels():
-    return render_template('labelManagement.html', labels=cache["Etiquettes"]["liste des étiquettes"], dataframes=cache["Paramètres"]["URL des fichiers de la base de données"].keys())
+    return render_template('labelManagement.html', labels=cache["Etiquettes"], dataframes=cache["Paramètres"]["URL des fichiers de la base de données"].keys())
 
 @app.route('/save-labels', methods=['POST'])
 def save_labels():
     global cache
     data = request.get_json()
     if data is not None:
-        cache["Etiquettes"]["liste des étiquettes"] = data
+        cache["Etiquettes"] = data
         with open("cache.json", "w", encoding='utf-8') as fp:
             json.dump(cache, fp, ensure_ascii=False)
         return '', 204

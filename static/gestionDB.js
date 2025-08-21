@@ -211,6 +211,21 @@ function openLabelsModal(rowID) {
             checkboxes.forEach(checkbox => {
                 checkbox.checked = data.labels.includes(checkbox.value);
             });
+            // Sort the container divs (including label and checkbox) so checked ones appear first
+            const labelDivs = Array.from(form.querySelectorAll('.label-checkbox')).map(cb => cb.parentElement);
+            labelDivs.sort((a, b) => {
+                const aChecked = a.querySelector('input[type="checkbox"][name="labels"]').checked ? 0 : 1;
+                const bChecked = b.querySelector('input[type="checkbox"][name="labels"]').checked ? 0 : 1;
+                if (aChecked !== bChecked) {
+                    return aChecked - bChecked;
+                }
+                // Suborder alphabetically by label text
+                const aLabel = a.querySelector('label') ? a.querySelector('label').textContent.trim().toLowerCase() : '';
+                const bLabel = b.querySelector('label') ? b.querySelector('label').textContent.trim().toLowerCase() : '';
+                return aLabel.localeCompare(bLabel);
+            });
+            labelDivs.forEach(div => form.removeChild(div));
+            labelDivs.forEach(div => form.appendChild(div));
         })
         .catch(() => {
             alert('Erreur lors du chargement des étiquettes.');

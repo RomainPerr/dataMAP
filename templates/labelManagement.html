@@ -12,6 +12,7 @@
 
   <script>
     var labels = {{ labels | tojson | safe }}; // not a true error, just Flask code not recognized by VS Code
+    var dataframes = {{ dataframes | list | tojson | safe }};
   </script>
 
 
@@ -22,7 +23,6 @@
   <h1>Gérer les étiquettes</h1>
 
   <button id="addLabelBtn" class="btn btn-primary">Ajouter une étiquette</button>
-  <button id="addTitleBtn" class="btn btn-primary">Ajouter un titre</button>
 
   <ul id="dragRoot">
 
@@ -46,6 +46,18 @@
             <h4 class="modal-title" id="labelConfigModalLabel">Configurer l'étiquette</h4>
           </div>
           <div class="modal-body">
+            <div class="form-group">
+              <label for="labelHeaderLevel">Niveau de police</label>
+              <select class="form-control" id="labelHeaderLevel" name="labelHeaderLevel">
+                <option value="">Normal</option>
+                <option value="h1">Titre 1 (h1)</option>
+                <option value="h2">Titre 2 (h2)</option>
+                <option value="h3">Titre 3 (h3)</option>
+                <option value="h4">Titre 4 (h4)</option>
+                <option value="h5">Titre 5 (h5)</option>
+                <option value="h6">Titre 6 (h6)</option>
+              </select>
+            </div>
             <div class="form-group">
               <label for="labelName">Nom de l'étiquette</label>
               <input type="text" class="form-control" id="labelName" name="labelName" required>
@@ -101,15 +113,7 @@
                   <div class="form-group">
                     <label>{{ dataframe }}</label>
                     <div style="max-height: 250px; overflow-y: auto;">
-                        {% set all_labels = (labels["classifiées"].keys() | list + labels["non_classifiées"].keys() | list) | unique %}
-                        {% for label in all_labels %}
-                        <div class="checkbox">
-                          <label>
-                            <input type="checkbox" name="attribution_{{ dataframe }}[]" value="{{ label }}">
-                            {{ label }}
-                          </label>
-                        </div>
-                      {% endfor %}
+                        
                     </div>
                   </div>
                 </div>

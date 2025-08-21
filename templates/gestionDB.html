@@ -99,7 +99,7 @@
                     <input type="hidden" name="rowID" value="{{ rowID }}">
                     {% for label in attachedLabels %}
                         <div style="margin-bottom: 8px;">
-                            <input type="checkbox" id="label_{{ loop.index }}" name="labels" value="{{ label }}">
+                            <input type="checkbox" id="label_{{ loop.index }}" name="labels" value="{{ label }}" class="label-checkbox">
                             <label for="label_{{ loop.index }}">{{ label }}</label>
                         </div>
                     {% endfor %}

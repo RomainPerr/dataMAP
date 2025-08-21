@@ -2,34 +2,58 @@
 
 window.onload = function() {
   var $root = $('#categorized-labels');
-  buildLabelTree(labels["classifiées"], $root, labels["racine_classifiées"], isClassified = true);
+  buildLabelTree(labels["liste des étiquettes"]["classifiées"], $root, labels["racines"]["racine_classifiées"], true);
   $root = $('#uncategorized-labels');
-  buildLabelTree(labels["non_classifiées"], $root, labels["racine_non_classifiées"], isClassified = false);
+  buildLabelTree(labels["liste des étiquettes"]["non_classifiées"], $root, labels["racines"]["racine_non_classifiées"], false);
 };
 
-function initToggle($ul){
-  if ($ul.children('li').length > 0) {
-    var $toggle = $('<span class="toggle-children" style="cursor:pointer; margin-right:4px;" title="Afficher/masquer les descendants">[–]</span>');
-    $ul.prepend($toggle);
+//TREE CONSTRUCTION AND FUNCTIONNALITIES IMPLEMENTATION
+
+function initToggle($li) {
+  var $ul = $li.children('ul');
+  if ($ul.children('li').length > 0 ) {
+    if ($li.children('.toggle-children').length > 0) {
+      $li.children('.toggle-children').remove();
+    }
+    var isVisible = $ul.css('display') !== 'none';
+    var $toggle = $('<span class="toggle-children" style="cursor:pointer; margin-right:4px;" title="Afficher/masquer les descendants">' + (isVisible ? '[–]' : '[+]') + '</span>');
+    $li.prepend($toggle);
 
     $toggle.on('click', function(e) {
       e.stopPropagation();
       $ul.toggle();
       $toggle.text($ul.is(':visible') ? '[–]' : '[+]');
+      $li.children('.node-cpe, .node-facility').first().attr('data-descendants-hidden', !$ul.is(':visible'));
     });
   }
+}
+
+function toggleHide($li){
+  var $ul = $li.children('ul');
+  var $toggle = $li.find('.toggle-children');
+  var $span = $li.children('.node-cpe, .node-facility').first();
+
+  $ul.hide();
+  $toggle.text('[+]');
+  $span.attr('data-descendants-hidden', true);
 }
 
 function buildLabelTree(labels, $root, roots, isClassified) {
   function createNode(label, data) {
     var $li = $('<li></li>');
-    var $span = $('<span class="node-cpe"></span>').text(label).css({color: data.color}).data('attachedDataframes', data.attachedDataframes);
+    var $span = $('<span class="node-cpe"></span>').text(label).css('color', data.color).data('attachedDataframes', data.attachedDataframes);
+    if (data.font && data.font.trim() !== "") {
+      $span.addClass(data.font);
+    }
+    // var style = {
+    //   "color": data.style.color
+    // };
+    // var $span = $('<span class="node-cpe"></span>').text(label).css(style).data('attachedDataframes', data.attachedDataframes);
     $li.append('<i class="icon-tag"></i> ').append($span);
 
     // Add show/hide toggle if there are children
     if (data.children && data.children.length > 0 && isClassified) {
-      var $toggle = $('<span class="toggle-children" style="cursor:pointer; margin-right:4px;" title="Afficher/masquer les descendants">[–]</span>');
-      $li.prepend($toggle);
+      
 
       var $ul = $('<ul></ul>');
       data.children.forEach(function(child) {
@@ -40,24 +64,13 @@ function buildLabelTree(labels, $root, roots, isClassified) {
           $ul.append('<li><i class="icon-tag"></i> <span class="node-cpe">' + child + '</span></li>');
         }
         
-      });
       $li.append($ul);
+      initToggle($li);
+      });
 
       if (data.isDescendantsHidden === "true") {
-        // Les descendants sont masqués
-        $ul.hide();
-        $toggle.text('[+]');
-        $span.attr('data-descendants-hidden', true);
+        toggleHide($li);
       }
-
-      // Toggle handler
-      $toggle.on('click', function(e) {
-        e.stopPropagation();
-        var $this = $(this);
-        $ul.toggle();
-        $this.text($ul.is(':visible') ? '[–]' : '[+]');
-        $span.attr('data-descendants-hidden', !$ul.is(':visible'));
-      });
     }
     return $li;
   }
@@ -85,13 +98,133 @@ function buildLabelTree(labels, $root, roots, isClassified) {
 
 
 
+//HELPER FUNCTIONS
 
+function addChildToLi($li, $child) {
+  var $ul = $li.children('ul');
+  if ($ul.length === 0) {
+    $ul = $('<ul></ul>');
+    $li.append($ul);
+  }
+  $ul.append($child);
+  initToggle($li);
+  return $ul;
+}
 
+function addChild($li, $child) {
+  addChildToLi($li, $child);
+  $('#dragRoot *[class*=node]').filter(function() {
+      return $(this).text() === $li.find(".node-cpe, .node-facility").first().text() && this !== $li.find(".node-cpe, .node-facility").first()[0];
+  }).each(function() {
+    var $labelLi = $(this).closest("li");
+    var $clonedItem = cloneItem($child);
+    addChildToLi($labelLi, $clonedItem);
+  });
+}
 
+function removeChild($li, $child) {
+  var $ul = $li.children('ul');
+  if ($ul.length > 0) {
+    $ul.children('li').filter(function() {
+      return $(this).find(".node-cpe, .node-facility").first().text() === $child.find(".node-cpe, .node-facility").first().text();
+    }).each(function() {
+      $(this).remove();
+    });
+  }
 
+  // Also remove from all other same-named labels in the tree
+  $('#dragRoot *[class*=node]').filter(function() {
+    return $(this).text() === $li.find(".node-cpe, .node-facility").first().text() && this !== $li.find(".node-cpe, .node-facility").first()[0];
+  }).each(function() {
+    var $labelLi = $(this).closest("li");
+    var $labelUl = $labelLi.children('ul');
+    if ($labelUl.length > 0) {
+      $labelUl.children('li').filter(function() {
+        return $(this).find(".node-cpe, .node-facility").first().text() === $child.find(".node-cpe, .node-facility").first().text();
+      }).each(function() {
+        $(this).remove();
+      });
+      if ($labelUl.children("li").length == 0) {
+        $labelUl.remove();
+      }
+    }
+  });
+  if ($ul.children("li").length == 0) {
+      $ul.remove();
+  }
+}
 
+function cloneItem($item) {
+  var $clonedItem = $item.clone(false, false).show();
+  DragAndDrop.enable($clonedItem);
+  initToggle($clonedItem);
+  return $clonedItem;
+}
 
-// Ensure DragAndDrop is defined and available after page load
+function isAncestorWithSameName($node, name) {
+  var $li = $node.closest("li");
+  var $ancestor = $li.parents("li").first();
+  while ($ancestor.length) {
+    var ancestorLabel = $ancestor.find(".node-cpe, .node-facility").first().text().trim();
+    if (ancestorLabel === name) {
+      return true;
+    }
+    $ancestor = $ancestor.parents("li").first();
+  }
+  return false;
+}
+
+function hasDescendantSameName($node, name) {
+  var $li = $node.closest("li");
+  var $descendants = $li.find(".node-cpe, .node-facility").not($node);
+  return $descendants.filter(function() {
+    return $(this).text().trim() === name;
+  }).length > 0;
+}
+
+function hasSiblingSameName($node, name) {
+  var $li = $node.closest("li");
+  var $siblings = $li.siblings("li").children(".node-cpe, .node-facility");
+  return $siblings.filter(function() {
+    return $(this).text().trim() === name && this !== $node[0];
+  }).length > 0;
+}
+
+// Helper: Copy classes and styles from reference node
+function copyClassesAndStyles($target, $source) {
+  $target.closest("span").attr('class', $source.attr('class'));
+  $target.closest("span").attr('style', $source.attr('style'));
+}
+
+// Helper: Copy data attributes from reference node
+function copyDataAttributes($target, $source) {
+  $.each($source.data(), function(key, value) {
+    $target.data(key, value);
+  });
+}
+
+// Helper: Clone and sync children UL from reference LI
+function syncChildrenUl($target, $ref) {
+  var $refLi = $ref.closest('li');
+  var $targetLi = $target.closest('li');
+  var $refUl = $refLi.children('ul').first();
+  if ($refUl.length) {
+    $targetLi.children('ul').remove();
+    var $clonedUl = $refUl.clone(false, false);
+    DragAndDrop.enable($clonedUl);
+    $targetLi.append($clonedUl);
+    // Add toggle if not present
+    initToggle($targetLi);
+  }
+}
+
+function copyLabel($target, $ref) {
+  copyClassesAndStyles($target, $ref);
+  copyDataAttributes($target, $ref);
+  syncChildrenUl($target, $ref);
+}
+
+// DRAG AND DROP BASE LOGIC
 $(document).ready(function() {
   window.DragAndDrop = (function (DragAndDrop) {
 
@@ -162,79 +295,14 @@ $(document).ready(function() {
           var $dstUL = $target.children("ul").first();
 
           // destination may not have a UL yet
-          if ($dstUL.length == 0) {
-              $dstUL = $("<ul></ul>");
-              $target.append($dstUL);
-          }
 
           $item.slideUp(50, function() {
-            $dstUL.append($item);
-            if ($target.children('.toggle-children').length === 0 && $dstUL.children('li').length > 0) {
-              var $toggle = $('<span class="toggle-children" style="cursor:pointer; margin-right:4px;" title="Afficher/masquer les descendants">[–]</span>');
-              $target.prepend($toggle);
-              $toggle.on('click', function(e) {
-                e.stopPropagation();
-                $dstUL.toggle();
-                $toggle.text($dstUL.is(':visible') ? '[–]' : '[+]');
-                $target.children('.node-cpe, .node-facility').first().attr('data-descendants-hidden', !$dstUL.is(':visible'));
-              });
-            }
-            $('#dragRoot *[class*=node]').filter(function() {
-                return $(this).text() === $target.find(".node-cpe, .node-facility").first().text() && this !== $target.find(".node-cpe, .node-facility").first()[0];
-            }).each(function() {
-              
-              var $labelLi = $(this).closest("li");
-              if ($labelLi[0] !== $item[0]) {
-                var $labelUl = $labelLi.children("ul").first();
-                if ($labelUl.length === 0) {
-                  $labelUl = $("<ul></ul>");
-                  $labelLi.append($labelUl);
-                }
-                var $clonedItem = $item.clone(false, false).show();
-                DragAndDrop.enable($clonedItem);
-                $labelUl.append($clonedItem);
-                if ($labelLi.children('.toggle-children').length === 0 && $labelUl.children('li').length > 0) {
-                  var $toggle = $('<span class="toggle-children" style="cursor:pointer; margin-right:4px;" title="Afficher/masquer les descendants">[–]</span>');
-                  $labelLi.prepend($toggle);
-                  $toggle.on('click', function(e) {
-                    e.stopPropagation();
-                    $labelUl.toggle();
-                    $toggle.text($labelUl.is(':visible') ? '[–]' : '[+]');
-                    $labelLi.children('.node-cpe, .node-facility').first().attr('data-descendants-hidden', !$labelUl.is(':visible'));
-                  });
-                }
-                
-              }
-            });
+            addChild($target, $item);
 
             // Remove all children named as the moved label from all parents named as the original parent, except the moved item itself
             var srcParentLabelName = $srcUL.parent().closest('li').children('.node-cpe, .node-facility').first().text().trim();
             var movedLabelName = $item.find('.node-cpe, .node-facility').first().text().trim();
-
-            $('#dragRoot li').each(function() {
-              var $li = $(this);
-              var $parentLabel = $li.children('.node-cpe, .node-facility').first();
-              if ($parentLabel.length && $parentLabel.text().trim() === srcParentLabelName) {
-              $li.children('ul').children('li').each(function() {
-                var $childLi = $(this);
-                var $childLabel = $childLi.children('.node-cpe, .node-facility').first();
-                if (
-                $childLabel.length &&
-                $childLabel.text().trim() === movedLabelName &&
-                $childLi[0] !== $item[0]
-                ) {
-                  $childLi.remove();
-                  if ($childLi.parent().children().length === 0) {
-                    $childLi.parent().remove();
-                  }
-                }
-              });
-              }
-            });
-
-            if ($srcUL.children("li").length == 0) {
-                $srcUL.remove();
-            }
+            removeChild($srcUL.parent().closest('li'), $item);
             
             $item.slideDown(50, function() {
               $item.css('display', '');
@@ -268,6 +336,11 @@ $(document).ready(function() {
   })(window.DragAndDrop || {});
 });
 
+
+
+
+// NAME EDITING LOGIC
+
 (function ($) {
   
   $.fn.beginEditing = function(whenDone) {
@@ -286,76 +359,44 @@ $(document).ready(function() {
       }
 
       // Prevent same name as any ancestor
-      var $li = $node.closest("li");
-      var $ancestor = $li.parent().closest("li");
-      while ($ancestor.length && !$ancestor.is("body")) {
-        var ancestorLabel = $ancestor.find(".node-cpe, .node-facility").first().text().trim();
-        if (ancestorLabel === newValue) {
-          alert("L'étiquette sélectionnée fait partie d'un groupe dont le nom est celui que vous essayez d'utiliser.");
-          cancel();
-          return;
-        }
-        $ancestor = $ancestor.parent().closest("li");
+      var $ancestor = $node.parent().closest("li");
+      if (isAncestorWithSameName($node, newValue)) {
+        alert("L'étiquette sélectionnée fait partie d'un groupe dont le nom est celui que vous essayez d'utiliser.");
+        cancel();
+        return;
       }
+      
 
       // Prevent same name as any descendant
-      var hasSameDescendant = $li.find(".node-cpe, .node-facility").filter(function() {
-        return $(this).text().trim() === newValue;
-      }).length > 0;
-      if (hasSameDescendant) {
+      if (hasDescendantSameName($node, newValue)) {
         alert("Ce nom d'étiquette fait déjà partie du groupe descendant de l'étiquette sélectionnée.");
         cancel();
         return;
       }
 
       // Prevent same name as any sibling
-      var $siblings = $li.siblings("li").children(".node-cpe, .node-facility");
-      var hasSameSibling = $siblings.filter(function() {
-        return $(this).text().trim() === newValue;
-      }).length > 0;
-      if (hasSameSibling) {
+      if (hasSiblingSameName($node, newValue)) {
         alert("Ce nom d'étiquette fait déjà partie du groupe de l'étiquette sélectionnée.");
         cancel();
         return;
       }
+      
       $editor.remove();
       $node.text(newValue);
-      // If there are other labels with the same name, match all their characteristics (CSS styles, classes, etc.)
+
+
+      
+
+      // If there are other labels with the same name, match all their characteristics
       var $allLabels = $('#dragRoot *[class*=node]').filter(function() {
         return $(this).text() === newValue && this !== $node[0];
       });
       if ($allLabels.length > 0) {
         var ref = $allLabels.first();
-        // Copy all classes except for the editing state
-        $node.attr('class', ref.attr('class'));
-        // Copy all inline styles
-        $node.attr('style', ref.attr('style'));
-        // Optionally, copy data attributes if needed
-        $.each(ref.data(), function(key, value) {
-          $node.data(key, value);
-        });
-        var $refLi = ref.closest('li');
-        var $refUl = $refLi.children('ul').first();
-        if ($refUl.length) {
-          // Remove existing children ul
-          $li.children('ul').remove();
-          // Clone and append the ul
-          var $clonedUl = $refUl.clone(false, false);
-          DragAndDrop.enable($clonedUl);
-          $li.append($clonedUl);
-          // Add toggle if not present
-          if ($li.children('.toggle-children').length === 0) {
-            var $toggle = $('<span class="toggle-children" style="cursor:pointer; margin-right:4px;" title="Afficher/masquer les descendants">[–]</span>');
-            $li.prepend($toggle);
-            $toggle.on('click', function(e) {
-              e.stopPropagation();
-              $clonedUl.toggle();
-              $toggle.text($clonedUl.is(':visible') ? '[–]' : '[+]');
-              $node.attr('data-descendants-hidden', !$clonedUl.is(':visible'));
-            });
-          }
-        }
+        copyLabel($node, ref);
       }
+
+
       whenDone($node);
     }
 
@@ -381,15 +422,15 @@ $(document).ready(function() {
 })(jQuery);
 
 
-
+//LISTENERS
 
 $(document).ready(function () {
   DragAndDrop.enable("#dragRoot");
   
   $(document).on("dblclick", "#dragRoot *[class*=node]", function(e) {
     if (!$(this).hasClass("non-editable")) {
-      $(this).beginEditing();
       onHoverNode(e, false);
+      $(this).beginEditing();
     }
   });
 
@@ -397,9 +438,7 @@ $(document).ready(function () {
     addLabel();
   });
 
-  $(document).on("click", "#addTitleBtn", function() {
-    addTitle();
-  });
+
 
   $(document).on("contextmenu", "#dragRoot *[class*=node]", function(e) {
     e.preventDefault();
@@ -407,10 +446,13 @@ $(document).ready(function () {
     $('#labelName').val($label.text());
     $('#labelConfigModal').data('labelElement', $label);
     var attached = $label.data('attachedDataframes') || [];
+    // Set the checkboxes for attached dataframes
     $('#labelAttachedDataframes input[type="checkbox"]').each(function() {
       var val = $(this).val();
       $(this).prop('checked', attached.indexOf(val) !== -1);
     });
+    //Set the header level input to the current label's header level
+    $('#labelHeaderLevel').val($label.data('headerLevel') || 0);
     // Set the color input to the current label color, converting from rgb to hex if needed
     function rgb2hex(rgb) {
       if (!rgb) return '#000000';
@@ -458,21 +500,7 @@ $(document).ready(function () {
     onHoverNode(e, false);
   });
   $(document).on("click", "#labelAttributionButton", function() {
-    // For each dataframe column, check the box if the label is in the dataframe's attached labels
-    $('#labelAttributionForm input[type="checkbox"]').each(function() {
-      var $checkbox = $(this);
-      var labelName = $checkbox.val();
-      var dataframe = $checkbox.attr('name').replace(/^attribution_/, '').replace(/\[\]$/, '');
-      // Find the label element in the DOM to get its attachedDataframes
-      var $labelElem = $('#dragRoot *[class*=node]').filter(function() {
-        return $(this).text() === labelName;
-      }).first();
-      var attached = $labelElem.data('attachedDataframes') || [];
-      $checkbox.prop('checked', attached.indexOf(dataframe) !== -1);
-    });
-
-    $('#labelAttributionModal').modal('show');
-
+    showLabelAttributionModal();
   });
   $(document).on("submit", "#labelAttributionForm", function(e) {
     e.preventDefault();
@@ -481,7 +509,58 @@ $(document).ready(function () {
 
 });
 
-// Append a new label (not a category) under the last category
+// HANDLE LISTENERS
+
+function showLabelAttributionModal(){
+  // For each dataframe column, check the box if the label is in the attachedLabels of a label's parameters (all happens locally until general save outside the modal)
+    var attributionDic = {};
+    $('#dragRoot *[class*=node]').each(function() {
+      var $label = $(this);
+      var labelName = $label.text();
+      var attached = $label.data('attachedDataframes') || [];
+      attached.forEach(function(dataframe) {
+        if (!attributionDic[dataframe]) {
+          attributionDic[dataframe] = [];
+        }
+        attributionDic[dataframe].push(labelName);
+      });
+    });
+    
+    // Get all unique label names
+    var allLabels = [];
+    $('#categorized-labels ul *[class*=node], #uncategorized-labels ul *[class*=node]').each(function() {
+      var labelName = $(this).text();
+      if (allLabels.indexOf(labelName) === -1) {
+      allLabels.push(labelName);
+      }
+    });
+    allLabels.sort();
+    console.log(allLabels);
+
+    // Clear all columns before appending new checkboxes
+    $('#labelAttributionForm .form-group div[style*="overflow-y: auto"]').each(function() {
+      $(this).empty();
+    });
+
+    // Create checkboxes for each dataframe and filling matching columns in the html
+    dataframes.forEach(function(dataframe) {
+      var $col = $('#labelAttributionForm label').filter(function() {
+      return $(this).text().trim() === dataframe;
+      }).closest('.form-group').find('div[style*="overflow-y: auto"]');
+      if ($col.length) {
+      allLabels.forEach(function(label) {
+        var checkboxId = 'attribution_' + dataframe + '_' + label.replace(/\s+/g, '_');
+        var isChecked = (attributionDic[dataframe] || []).indexOf(label) !== -1;
+        var $checkbox = $('<div class="checkbox"><label><input type="checkbox" name="attribution_' + dataframe + '[]" value="' + label + '" id="' + checkboxId + '"' + (isChecked ? ' checked' : '') + '> ' + label + '</label></div>');
+        $col.append($checkbox);
+      });
+      }
+    });
+  
+  $('#labelAttributionModal').modal('show');
+}
+
+// Append a new label in uncategorized-labels
 function addLabel(){
 
   var $ul = $('#uncategorized-labels').children('ul');
@@ -490,16 +569,6 @@ function addLabel(){
     $('#uncategorized-labels').append($ul);
   }
   $ul.append('<li><i class="icon-tag"></i> <span class="node-cpe">Nouvelle étiquette</span></li>');  DragAndDrop.enable($('#dragRoot li:last-child'));
-}
-
-function addTitle(){
-  var $lastCategory = $('#dragRoot .node-facility:last-child');
-  var $ul = $lastCategory.children('ul');
-  if ($ul.length === 0) {
-    $ul = $('<ul></ul>');
-    $lastCategory.append($ul);
-  }
-  $ul.append('<li><i class="icon-tag"></i> <span class="node-cpe">Nouveau titre</span></li>');  DragAndDrop.enable($('#dragRoot li:last-child'));
 }
 
 
@@ -527,23 +596,16 @@ function saveLabelOptions(){
 
   // Prevent same name as any ancestor
   var $li = $label.closest("li");
-  var $ancestor = $li.parent().closest("li");
-  while ($ancestor.length && !$ancestor.is("body")) {
-    var ancestorLabel = $ancestor.find(".node-cpe, .node-facility").first().text().trim();
-    if (ancestorLabel === newLabelName) {
-      $('#labelName').addClass('is-invalid');
-      if ($('#labelName').next('.label-error-message').length === 0) {
-        $('#labelName').after('<div class="label-error-message text-danger" style="font-size:0.9em;">L\'étiquette sélectionnée fait partie d\'un groupe dont le nom est celui que vous essayez d\'utiliser.</div>');
-      }
-      return false;
+  if (isAncestorWithSameName($label, newLabelName)) {
+    $('#labelName').addClass('is-invalid');
+    if ($('#labelName').next('.label-error-message').length === 0) {
+      $('#labelName').after('<div class="label-error-message text-danger" style="font-size:0.9em;">L\'étiquette sélectionnée fait partie d\'un groupe dont le nom est celui que vous essayez d\'utiliser.</div>');
     }
-    $ancestor = $ancestor.parent().closest("li");
+    return false;
   }
 
   // Prevent same name as any descendant (excluding the label itself)
-  var hasSameDescendant = $li.find(".node-cpe, .node-facility").filter(function() {
-    return $(this).text().trim() === newLabelName && this !== $label[0];
-  }).length > 0;
+  var hasSameDescendant = hasDescendantSameName($label, newLabelName);
   if (hasSameDescendant) {
     $('#labelName').addClass('is-invalid');
     if ($('#labelName').next('.label-error-message').length === 0) {
@@ -553,11 +615,7 @@ function saveLabelOptions(){
   }
 
   // Prevent same name as any sibling
-  var $siblings = $li.siblings("li").children(".node-cpe, .node-facility");
-  var hasSameSibling = $siblings.filter(function() {
-    return $(this).text().trim() === newLabelName;
-  }).length > 0;
-  if (hasSameSibling) {
+  if (hasSiblingSameName($label, newLabelName)) {
     $('#labelName').addClass('is-invalid');
     if ($('#labelName').next('.label-error-message').length === 0) {
       $('#labelName').after('<div class="label-error-message text-danger" style="font-size:0.9em;">Ce nom d\'étiquette fait déjà partie du groupe de l\'étiquette sélectionnée.</div>');
@@ -579,8 +637,35 @@ function saveLabelOptions(){
       return false;
     }
   }
+
   
   for (var i = 0; i < sameLabel.length; i++) {
+    
+    // Set font-weight and font-size based on header level
+    var headerLevel = $('#labelHeaderLevel').val();
+    switch(headerLevel) {
+      case 'h1':
+      sameLabel[i].addClass('h1');
+      break;
+      case 'h2':
+      sameLabel[i].addClass('h2');
+      break;
+      case 'h3':
+      sameLabel[i].addClass('h3');
+      break;
+      case 'h4':
+      sameLabel[i].addClass('h4');
+      break;
+      case 'h5':
+      sameLabel[i].addClass('h5');
+      break;
+      case 'h6':
+      sameLabel[i].addClass('h6');
+      break;
+      default:
+      sameLabel[i].css({'font-weight': '', 'font-style': '', 'font-size': '', 'color': ''});
+    }
+
     sameLabel[i].text($('#labelName').val());
     sameLabel[i].css('color', $('#labelColor').val());
     sameLabel[i].data('attachedDataframes', $('#labelAttachedDataframes input:checked').map(function() {
@@ -589,38 +674,10 @@ function saveLabelOptions(){
   }
 
   if (sameLabel.length > 1) {
-    // Find the first label with the same name (excluding the one being edited)
-    var $first = sameLabel[0];
-    // Copy its children UL (if any) to all other same-named labels (except itself)
-    var $firstUl = $first.closest('li').children('ul').first();
-    if ($firstUl.length) {
-      for (var i = 1; i < sameLabel.length; i++) {
-        var $li = sameLabel[i].closest('li');
-        // Remove existing children ul
-        $li.children('ul').remove();
-        // Clone and append the ul
-        // Deep clone the UL but remove any jQuery event handlers to avoid shared state
-        var $clonedUl = $firstUl.clone(false, false);
-        // Re-enable drag and drop on the new subtree
-        DragAndDrop.enable($clonedUl);
-        $li.append($clonedUl);
-        if ($clonedUl.children('li').length > 0) {
-          // Add toggle if not present
-          if ($li.children('.toggle-children').length === 0) {
-            var $toggle = $('<span class="toggle-children" style="cursor:pointer; margin-right:4px;" title="Afficher/masquer les descendants">[–]</span>');
-            $li.prepend($toggle);
-            $toggle.on('click', function(e) {
-              e.stopPropagation();
-              $clonedUl.toggle();
-              $toggle.text($clonedUl.is(':visible') ? '[–]' : '[+]');
-              sameLabel[i].attr('data-descendants-hidden', !$clonedUl.is(':visible'));
-            });
-          }
-        }
-      }
-    }
+    // Use helpers to sync all same-named labels
+    var $ref = sameLabel[0];
+    copyLabel($label, $ref);
   }
-
 
   $('#labelConfigModal').modal('hide');
 }
@@ -642,12 +699,15 @@ function resetColor(){
 }
 
 function saveLabelParameters() {
-  var dic = {racine_non_classifiées: [], non_classifiées: {}, racine_classifiées: [], classifiées: {}};
+  var dic = {racines: {racine_non_classifiées: [], racine_classifiées: []}, "liste des étiquettes": { non_classifiées: {}, classifiées: {} }};
   $('#uncategorized-labels .node-cpe').each(function() {
     var $label = $(this);
-    dic.non_classifiées[$label.text()] = {
+    dic["liste des étiquettes"]["non_classifiées"][$label.text()] = {
       color: $label.css('color'),
-      attachedDataframes: $label.data('attachedDataframes') || []
+      attachedDataframes: $label.data('attachedDataframes') || [],
+      font: $label.attr('class').split(' ').filter(function(c) {
+        return c.startsWith('h');
+      }).join(' ')
     };
   });
   
@@ -658,19 +718,23 @@ function saveLabelParameters() {
     $label.closest('li').children('ul').children('li').children('.node-cpe').each(function() {
       children.push($(this).text());
     });
-    dic.classifiées[$label.text()] = {
+    children.sort();
+    dic["liste des étiquettes"]["classifiées"][$label.text()] = {
       children: children,
       color: $label.css('color'),
       attachedDataframes: $label.data('attachedDataframes') || [],
-      isDescendantsHidden: $label.attr('data-descendants-hidden')
+      isDescendantsHidden: $label.attr('data-descendants-hidden'),
+      font: $label.attr('class').split(' ').filter(function(c) {
+        return c.startsWith('h');
+      }).join(' ')
     };
   });
 
-  dic.racine_classifiées = $('#categorized-labels > ul > li').map(function() {
+  dic["racines"]["racine_classifiées"] = $('#categorized-labels > ul > li').map(function() {
     return $(this).children('.node-cpe').text();
   }).get();
 
-  dic.racine_non_classifiées = $('#uncategorized-labels > ul > li').map(function() {
+  dic["racines"]["racine_non_classifiées"] = $('#uncategorized-labels > ul > li').map(function() {
     return $(this).children('.node-cpe').text();
   }).get();
 
@@ -691,9 +755,15 @@ function saveLabelParameters() {
 
 function duplicateLabel() {
   var $label = $('#labelConfigModal').data('labelElement');
-  var $newLabel = $('<li></li>').append($label.clone());
+  var $newLabel = $("<li></li>").append($label.clone());
+  copyLabel($newLabel, $label);
+  var $ul = $('#uncategorized-labels > ul');
+  if ($ul.length === 0) {
+    $ul = $('<ul></ul>');
+    $('#uncategorized-labels').append($ul);
+  }
+  $ul.append($newLabel);
   DragAndDrop.enable($newLabel);
-  $("#uncategorized-labels > ul").append($newLabel);
   $('#labelConfigModal').modal('hide');
 }
 

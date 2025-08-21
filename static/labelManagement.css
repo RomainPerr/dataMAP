@@ -66,3 +66,51 @@
 li {
   list-style: none;
 }
+
+.h1 {
+  font-size: 2em;
+  font-weight: bold;
+  color: #1a237e;
+  margin-top: 16px;
+  margin-bottom: 8px;
+}
+
+.h2 {
+  font-size: 1.5em;
+  font-weight: bold;
+  color: #3949ab;
+  margin-top: 12px;
+  margin-bottom: 6px;
+}
+
+.h3 {
+  font-size: 1.17em;
+  font-weight: bold;
+  color: #5c6bc0;
+  margin-top: 8px;
+  margin-bottom: 4px;
+}
+
+h4 {
+  font-size: 1em;
+  font-weight: bold;
+  color: #7986cb;
+  margin-top: 6px;
+  margin-bottom: 3px;
+}
+
+h5 {
+  font-size: 0.83em;
+  font-weight: bold;
+  color: #9fa8da;
+  margin-top: 4px;
+  margin-bottom: 2px;
+}
+
+h6 {
+  font-size: 0.67em;
+  font-weight: bold;
+  color: #c5cae9;
+  margin-top: 2px;
+  margin-bottom: 1px;
+}
