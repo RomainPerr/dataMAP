@@ -47,7 +47,7 @@ def filter_df_by_column(df, column_name, value):
 
 
 # Function to convert DataFrame to HTML shown in gestionDB.html
-def df_to_html(df, ColNotToShow):
+def df_to_html(df, ColNotToShow, current_filter):
     df = df.fillna('')
     if isinstance(df.columns, pd.MultiIndex):
         nom_cols = []
@@ -57,6 +57,19 @@ def df_to_html(df, ColNotToShow):
         df_toshow = df.drop(columns=nom_cols, errors='ignore')
     else:
         df_toshow = df.drop(columns=ColNotToShow, errors='ignore')
+    
+    
+    if current_filter:
+        for key, values in current_filter.items():
+            if "non rempli" in values:
+                values += ['']
+            print("ZZZZZZ"*60)
+            print(df_toshow[("","", "Etiquettes")].head())
+            if key == "Etiquettes":
+                df_toshow = df_toshow[df_toshow[("","", "Etiquettes")].apply(lambda etiquettes: any(e in values for e in etiquettes if isinstance(etiquettes, list)))]
+            else:
+                df_toshow = df_toshow[df_toshow[simpleColumnsNamesToCompleteColumnsNames(key, df)].isin(values)]
+            
 
     df_toshow = df_toshow.drop(columns=[("","", "Etiquettes")], errors='ignore')
 
@@ -215,3 +228,19 @@ def add_column(df, request):
     df = df.reindex(columns=columns)
     
     return df
+
+def get_unique_values(df, column):
+    if df is not None and column in df.columns:
+        return [val for val in df[column].dropna().unique().tolist() if val != ""]
+    return []
+
+def simpleColumnsNamesToCompleteColumnsNames(cols, df):
+    if isinstance(cols, list):
+        complete_cols = []
+        for dfcol in df.columns:
+            if dfcol[2] in cols:
+                complete_cols.append(dfcol)
+        return complete_cols
+    elif isinstance(cols, str):
+        matches = [col for col in df.columns if col[2] == cols]
+        return matches[0] if matches else None

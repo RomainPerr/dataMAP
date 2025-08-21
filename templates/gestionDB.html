@@ -10,6 +10,14 @@
             .error { color: red; }
         </style>
         <script src="{{ url_for('static', filename='gestionDB.js') }}"></script>
+
+        <script>
+            // Example data structure: replace with backend data as needed
+            const filterData = {{ filter_data|tojson|safe }}; // {col1: [label1, label2], col2: [label3, ...], ...}
+            const shownColumns = {{ columns|tojson|safe }}; // List of shown column names
+            const currentFilter = {{ current_filter|tojson|safe }}; // Current filter applied
+            const attachedLabels = {{ attachedLabels|tojson|safe }}; // List of labels attached to the row
+        </script>
     </head>
 
     <body>
@@ -38,6 +46,32 @@
                 </div>
             </div>
         </div>
+
+        <!-- Filter Modal -->
+        <div id="filterModal" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.5); align-items:center; justify-content:center; z-index:1000; overflow:auto;">
+            <div style="background:white; padding:20px; border-radius:8px; min-width:400px; max-width:600px; max-height:90vh; overflow:auto; display:flex; flex-direction:column;">
+                
+                
+                <form id="filterForm" style="display:flex; flex-direction:column;">
+                    <h2>Filtrer sur les étiquettes</h2>
+                    <div id="filterLabels" style="display:flex; gap:40px; flex-wrap:wrap; max-width:100%;">
+                        <!-- Columns and filters are injected here by JS -->
+                    </div>
+                    <h2>Filtrer sur les colonnes</h2>
+                    <div id="filterColumns" style="display:flex; gap:40px; flex-wrap:wrap; max-width:100%;">
+                        <!-- Columns and filters are injected here by JS -->
+                    </div>
+                    <div style="margin-top:20px; text-align:right;">
+                        <button type="button" onclick="applyFilters()">Appliquer</button>
+                        <button type="button" onclick="closeFilterModal()">Fermer</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        <button onclick="openFilterModal()">Filtrer</button>
+
+        <!-- Export Modal -->
+        
 
 
         <div style="display: flex; align-items: flex-start; margin-top: 20px; margin-bottom: 20px;">

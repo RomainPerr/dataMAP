@@ -111,6 +111,7 @@ def menuDB():
 # the databases as long as the user is working with the same database
 current_df = None
 current_df_name = None
+current_filter = None
 
 @app.route('/gestionDB') #auto-reload without specifying database, it will use the current_df_name
 def auto_render():
@@ -120,6 +121,7 @@ def auto_render():
 def render(db):
     global current_df
     global current_df_name
+    global current_filter
 
     if db == 'pas de base de données spécifiée':
         return "No database specified. Please select a database from the menu.", 400
@@ -148,7 +150,19 @@ def render(db):
     if ("","", "Etiquettes") not in current_df.columns: #if labels columns does not exist yet, create it
         current_df[("","", "Etiquettes")] = ""
 
-    return render_template('gestionDB.html', df=gestionDB.df_to_html(current_df, ColNotToShow), columns=columns, form=form, full_columns=all_columns_names, attachedLabels=attached_labels)
+    ColToShow = [col for col in columns if ((col not in ColNotToShow) and (col != "Etiquettes"))]
+    ColToShow = gestionDB.simpleColumnsNamesToCompleteColumnsNames(ColToShow, current_df)
+    
+    filter_data = {}
+    for col in ColToShow:
+        countUnique = current_df[col][current_df[col] != ""].nunique(dropna=True)
+        count = len(current_df[col][current_df[col] != ""].dropna())
+        if countUnique < count and any(val != "" for val in current_df[col]) and countUnique > 1:
+            filter_data[col[2]] = gestionDB.get_unique_values(current_df, col)
+            if current_df[col].isna().any() or (current_df[col] == "").any():
+                filter_data[col[2]].append("non rempli")
+    
+    return render_template('gestionDB.html', df=gestionDB.df_to_html(current_df, ColNotToShow, current_filter), columns=columns, form=form, full_columns=all_columns_names, attachedLabels=attached_labels, filter_data=filter_data, current_filter = current_filter)
 
 
 # Functions used in gestionDB.html
@@ -260,11 +274,8 @@ def saveLabelAttribution():
     data = request.get_json()
     rowID = data.get("rowID")
     labels = data.get("labels", [])
-    print("XXXXX"*60)
-    print(rowID, labels)
     if data is not None:
         current_df.at[int(rowID), ("", "", "Etiquettes")] = labels
-    print(current_df[("", "", "Etiquettes")].head())
     return '', 204
 
 @app.route('/getLabelsForRow/<rowID>')
@@ -273,3 +284,42 @@ def getLabelsForRow(rowID):
     df = current_df
     labels = df[("","", "Etiquettes")].iloc[int(rowID)]
     return jsonify({"labels": labels}), 200
+
+@app.route('/applyFilters', methods=['POST'])
+def applyFilters():
+    global current_filter
+    current_filter = request.get_json()
+
+    if current_filter.get("Etiquettes"):
+        # Get all selected labels and their children recursively
+        def get_all_labels_with_children(selected_labels, classified_labels):
+            result = set()
+            def add_label_and_children(label):
+                if label not in result:
+                    result.add(label)
+                    children = classified_labels.get(label, {}).get("children", [])
+                    for child in children:
+                        add_label_and_children(child)
+            for label in selected_labels:
+                add_label_and_children(label)
+            return list(result)
+        
+        selected_labels = current_filter["Etiquettes"]
+        classified_labels = cache["Etiquettes"]["liste des étiquettes"]["classifiées"]
+        current_filter["Etiquettes"] = get_all_labels_with_children(selected_labels, classified_labels)
+    return '', 204
+
+# @app.route('/exportData', methods=['POST'])
+# def exportData():
+#     global current_df
+#     df = current_df
+#     format = request.get_json().get('format')
+#     cols = request.get_json().get('cols', [])
+#     if format and cols:
+#         if format == 'csv':
+#             # CSV export logic here
+#         elif format == 'xlsx':
+#             # XLSX export logic here
+#         elif format == 'raw':
+#             # Raw text export logic here
+#     return '', 204

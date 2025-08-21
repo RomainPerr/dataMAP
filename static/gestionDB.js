@@ -204,32 +204,64 @@ function openLabelsModal(rowID) {
     document.getElementById("labelsModal").style.display = "block";
     const form = document.getElementById("labelsForm");
     form.setAttribute("data-row-id", rowID);
+    // Create or get the search bar
+    let searchBar = document.getElementById('labelsSearchBar');
+    if (!searchBar) {
+        searchBar = document.createElement('input');
+        searchBar.type = 'text';
+        searchBar.id = 'labelsSearchBar';
+        searchBar.placeholder = 'Rechercher une étiquette...';
+        searchBar.style.marginBottom = '10px';
+        form.insertBefore(searchBar, form.firstChild);
+    }
+
+    var data = {};
+    // Helper to sort and display checkboxes
+    function sortAndDisplayCheckboxes(filterText = '') {
+        const checkboxes = form.querySelectorAll('input[type="checkbox"][name="labels"]');
+        checkboxes.forEach(checkbox => {
+            checkbox.checked = data.labels.includes(checkbox.value);
+        });
+        
+        // Sort the container divs (including label and checkbox)
+        const labelDivs = Array.from(form.querySelectorAll('.label-checkbox')).map(cb => cb.parentElement);
+        labelDivs.sort((a, b) => {
+            // 1. Checked first
+            const aChecked = a.querySelector('input[type="checkbox"][name="labels"]').checked ? 0 : 1;
+            const bChecked = b.querySelector('input[type="checkbox"][name="labels"]').checked ? 0 : 1;
+            if (aChecked !== bChecked) return aChecked - bChecked;
+            // 2. Filter match first
+            const aLabel = a.querySelector('label') ? a.querySelector('label').textContent.trim().toLowerCase() : '';
+            const bLabel = b.querySelector('label') ? b.querySelector('label').textContent.trim().toLowerCase() : '';
+            const filter = filterText.trim().toLowerCase();
+            const aMatch = filter && aLabel.includes(filter) ? 0 : 1;
+            const bMatch = filter && bLabel.includes(filter) ? 0 : 1;
+            if (aMatch !== bMatch) return aMatch - bMatch;
+            // 3. Alphabetical
+            return aLabel.localeCompare(bLabel);
+        });
+        labelDivs.forEach(div => form.removeChild(div));
+        labelDivs.forEach(div => form.appendChild(div));
+    }
+
     fetch(`/getLabelsForRow/${rowID}`)
         .then(response => response.json())
-        .then(data => {
-            const checkboxes = form.querySelectorAll('input[type="checkbox"][name="labels"]');
-            checkboxes.forEach(checkbox => {
-                checkbox.checked = data.labels.includes(checkbox.value);
-            });
-            // Sort the container divs (including label and checkbox) so checked ones appear first
-            const labelDivs = Array.from(form.querySelectorAll('.label-checkbox')).map(cb => cb.parentElement);
-            labelDivs.sort((a, b) => {
-                const aChecked = a.querySelector('input[type="checkbox"][name="labels"]').checked ? 0 : 1;
-                const bChecked = b.querySelector('input[type="checkbox"][name="labels"]').checked ? 0 : 1;
-                if (aChecked !== bChecked) {
-                    return aChecked - bChecked;
-                }
-                // Suborder alphabetically by label text
-                const aLabel = a.querySelector('label') ? a.querySelector('label').textContent.trim().toLowerCase() : '';
-                const bLabel = b.querySelector('label') ? b.querySelector('label').textContent.trim().toLowerCase() : '';
-                return aLabel.localeCompare(bLabel);
-            });
-            labelDivs.forEach(div => form.removeChild(div));
-            labelDivs.forEach(div => form.appendChild(div));
+        .then(responseData => {
+            data = responseData;
+            sortAndDisplayCheckboxes();
         })
         .catch(() => {
             alert('Erreur lors du chargement des étiquettes.');
         });
+
+    // Add event listener for dynamic search
+    searchBar.oninput = () => {
+        const checkboxes = form.querySelectorAll('input[type="checkbox"][name="labels"]');
+        data.labels = Array.from(checkboxes)
+            .filter(cb => cb.checked)
+            .map(cb => cb.value);
+        sortAndDisplayCheckboxes(searchBar.value);
+    };
 }
 
 function closeLabelsModal() {
@@ -263,3 +295,245 @@ function saveLabelAttribution() {
         alert('Erreur lors de la sauvegarde des attributions.');
     });
 }
+
+//FILTERING MODAL
+
+function openFilterModal() {
+    document.getElementById('filterModal').style.display = 'flex';
+    renderFilterColumns();
+}
+function closeFilterModal() {
+    document.getElementById('filterModal').style.display = 'none';
+}
+
+function renderFilterColumns() {
+    const labelsContainer = document.getElementById('filterLabels');
+    labelsContainer.innerHTML = '';
+    var shownColumns = Object.keys(filterData);
+
+    // Render the "Étiquettes" filter section
+    const etiquettesDiv = document.createElement('div');
+    etiquettesDiv.style.minWidth = '180px';
+    etiquettesDiv.innerHTML = `
+        <div style="font-weight:bold; margin-bottom:4px;">Etiquettes</div>
+        <input type="text" placeholder="Rechercher..." oninput="filterLabels('Etiquettes', this.value)" style="width:100%; margin-bottom:8px;" id="search_Etiquettes">
+        <div style="display: flex; gap: 40px; margin-bottom: 16px;">
+            <button type="button" onclick="unselectAll('Etiquettes')">Tout désélectionner</button>
+        </div>
+        <div id="labels_Etiquettes">
+            ${attachedLabels.map(label => `
+                <div>
+                    <input type="checkbox" name="Etiquettes" value="${label}" id="cb_Etiquettes_${label}">
+                    <label for="cb_Etiquettes_${label}">${label}</label>
+                </div>
+            `).join('')}
+        </div>
+    `;
+    etiquettesDiv.setAttribute('data-col-index', -1);
+    labelsContainer.appendChild(etiquettesDiv);
+
+    const container = document.getElementById('filterColumns');
+    container.innerHTML = '';
+    shownColumns.forEach(col => {
+        const labels = filterData[col] || [];
+        const colDiv = document.createElement('div');
+        colDiv.style.minWidth = '180px';
+        colDiv.innerHTML = `
+            <div style="font-weight:bold; margin-bottom:4px;">${col}</div>
+            <input type="text" placeholder="Rechercher..." oninput="filterLabels('${col}', this.value)" style="width:100%; margin-bottom:8px;" id="search_${col}">
+            <div style="display: flex; gap: 40px; margin-bottom: 16px;">
+                <button type="button" onclick="unselectAll('${col}')">Tout désélectionner</button>
+            </div>
+            <div id="labels_${col}">
+                ${labels.map(label => `
+                    <div>
+                        <input type="checkbox" name="${col}" value="${label}" id="cb_${col}_${label}">
+                        <label for="cb_${col}_${label}">${label}</label>
+                    </div>
+                `).join('')}
+            </div>
+        `;
+        colDiv.setAttribute('data-col-index', shownColumns.indexOf(col));
+        container.appendChild(colDiv);
+    });
+    // Initial rendering of labels with current filter
+    if (typeof currentFilter === 'object') {
+        Object.keys(currentFilter).forEach(col => {
+            filterLabels(col, '', true);
+        });
+    }
+}
+
+function filterLabels(col, search, isInitialRender = false) {
+    const labelsDiv = document.getElementById('labels_' + col);
+    // Get the text content of all label elements inside labelsDiv
+    let labels = [];
+    if (col != "Etiquettes") {
+        labels = filterData[col] || [];
+    }else{
+        labels = attachedLabels;
+    }
+    const searchLower = search.toLowerCase();
+
+    // Get checked values before re-rendering
+    const checkedValues = new Set(
+        Array.from(labelsDiv.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value)
+    );
+
+
+
+    // On initial render, set checkedValues from currentFilter if available
+    if (isInitialRender === true && typeof currentFilter === 'object' && currentFilter[col]) {
+        checkedValues.clear();
+        currentFilter[col].forEach(val => checkedValues.add(val));
+    }
+
+    let sorted;
+    if (searchLower === '') {
+        // Checked first, then alphabetical
+        sorted = labels.slice().sort((a, b) => {
+            const aChecked = checkedValues.has(a) ? 0 : 1;
+            const bChecked = checkedValues.has(b) ? 0 : 1;
+            if (aChecked !== bChecked) return aChecked - bChecked;
+            return a.localeCompare(b);
+        });
+    } else {
+        // Matching search first, then alphabetical
+        sorted = labels.slice().sort((a, b) => {
+            const aMatch = a.toLowerCase().includes(searchLower);
+            const bMatch = b.toLowerCase().includes(searchLower);
+            if (aMatch && !bMatch) return -1;
+            if (!aMatch && bMatch) return 1;
+            return a.localeCompare(b);
+        });
+    }
+
+    labelsDiv.innerHTML = sorted.map(label => `
+        <div>
+            <input type="checkbox" name="${col}" value="${label}" id="cb_${col}_${label}"${checkedValues.has(label) ? ' checked' : ''}>
+            <label for="cb_${col}_${label}">${label}</label>
+        </div>
+    `).join('');
+}
+
+function applyFilters() {
+    const form = document.getElementById('filterForm');
+    const formData = new FormData(form);
+    const filters = {};
+    for (let [key, value] of formData.entries()) {
+        if (!filters[key]) filters[key] = [];
+        filters[key].push(value);
+    }
+    
+    fetch('/applyFilters', {
+        method: 'POST',
+        body: JSON.stringify(filters),
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(response => {
+        if (response.ok) {
+            closeFilterModal();
+            location.reload();
+        } else {
+            alert('Erreur lors de l\'application des filtres.');
+        }
+    })
+    .catch(() => {
+        alert('Erreur lors de l\'application des filtres.');
+    });
+}
+
+function unselectAll(col) {
+    const labelsDiv = document.getElementById('labels_' + col);
+    if (!labelsDiv) return;
+    const checkboxes = labelsDiv.querySelectorAll('input[type="checkbox"]');
+    checkboxes.forEach(cb => cb.checked = false);
+}
+
+// EXPORT MODAL
+
+// function openExportModal() {
+//     document.getElementById('exportModal').style.display = 'flex';
+//     renderExportColumns();
+//     document.getElementById('rawExportArea').style.display = 'none';
+// }
+// function closeExportModal() {
+//     document.getElementById('exportModal').style.display = 'none';
+// }
+// function renderExportColumns() {
+//     const container = document.getElementById('exportColumns');
+//     container.innerHTML = '';
+//     (shownColumns || []).forEach(col => {
+//         const div = document.createElement('div');
+//         div.innerHTML = `<label><input type="checkbox" name="exportCols" value="${col}" checked> ${col}</label>`;
+//         container.appendChild(div);
+//     });
+// }
+// document.querySelectorAll('input[name="exportFormat"]').forEach(el => {
+//     el.addEventListener('change', function() {
+//         if (this.value === 'raw') {
+//             showRawExport();
+//         } else {
+//             document.getElementById('rawExportArea').style.display = 'none';
+//         }
+//     });
+// });
+// function getSelectedExportColumns() {
+//     return Array.from(document.querySelectorAll('#exportColumns input[type=checkbox]:checked')).map(cb => cb.value);
+// }
+// function submitExport() {
+//     const format = document.querySelector('input[name="exportFormat"]:checked').value;
+//     const cols = getSelectedExportColumns();
+//     if (cols.length === 0) {
+//         alert('Sélectionnez au moins une colonne.');
+//         return;
+//     }
+//     if (format === 'raw') {
+//         showRawExport();
+//         return;
+//     }
+//     fetch('/exportData', {
+//         method: 'POST',
+//         headers: {'Content-Type': 'application/json'},
+//         body: JSON.stringify({columns: cols, format: format})
+//     })
+//     .then(response => {
+//         if (format === 'csv' || format === 'xlsx') {
+//             return response.blob();
+//         }
+//         return response.text();
+//     })
+//     .then(data => {
+//         if (format === 'csv' || format === 'xlsx') {
+//             const ext = format === 'csv' ? 'csv' : 'xlsx';
+//             const url = window.URL.createObjectURL(data);
+//             const a = document.createElement('a');
+//             a.href = url;
+//             a.download = `export.${ext}`;
+//             document.body.appendChild(a);
+//             a.click();
+//             a.remove();
+//             window.URL.revokeObjectURL(url);
+//         }
+//     });
+// }
+// function showRawExport() {
+//     const cols = getSelectedExportColumns();
+//     fetch('/exportData', {
+//         method: 'POST',
+//         headers: {'Content-Type': 'application/json'},
+//         body: JSON.stringify({columns: cols, format: 'raw'})
+//     })
+//     .then(response => response.text())
+//     .then(text => {
+//         document.getElementById('rawExportText').value = text;
+//         document.getElementById('rawExportArea').style.display = 'block';
+//     });
+// }
+// function copyRawExport() {
+//     const textarea = document.getElementById('rawExportText');
+//     textarea.select();
+//     document.execCommand('copy');
+// }
