@@ -74,9 +74,24 @@ def df_to_html(df, ColNotToShow, current_filter):
         df_toshow = df_toshow.drop(columns=ColNotToShow, errors='ignore')
             
     df_toshow = df_toshow.reset_index()
-    df_toshow = df_toshow.to_html(classes='table table-striped', index=False)
 
-    # Add buttons at the end of each row/at the beginning of each column
+    # Create lists of future IDs for 2nd and 3rd level headers
+    future_first_level_ids = []
+    future_second_level_ids = []
+    future_third_level_ids = []
+
+    if isinstance(df_toshow.columns, pd.MultiIndex):
+        for col in df_toshow.columns:
+            if col[0] not in future_first_level_ids:
+                future_first_level_ids.append(col[0])
+            # For 2nd level: add first level header if not already present
+            if (col[0], col[1]) not in future_second_level_ids:
+                future_second_level_ids.append((col[0], col[1]))
+            # For 3rd level: add (first, second) tuple if not already present
+            if (col[0], col[1], col[2]) not in future_third_level_ids:
+                future_third_level_ids.append((col[0], col[1], col[2]))
+
+    df_toshow = df_toshow.to_html(classes='table table-striped', index=False)
 
     soup = BeautifulSoup(df_toshow, "html.parser")
     table = soup.find("table")
@@ -84,10 +99,35 @@ def df_to_html(df, ColNotToShow, current_filter):
         table['id'] = "mainTable"
         # Add a delete button to each column header (third header row)
         header_rows = table.find_all("tr")
+        
         if len(header_rows) >= 3:
+            # Add id attributes to each header cell in the three header rows
+            first_header = header_rows[0]
+            second_header = header_rows[1]
+            third_header = header_rows[2]
+
+            # First header row: assign id from future_first_level_ids
+            for idx, th in enumerate(first_header.find_all("th")):
+                if idx < len(future_first_level_ids):
+                    th['id'] = future_first_level_ids[idx]
+
+            # Second header row: assign id from future_second_level_ids
+            for idx, th in enumerate(second_header.find_all("th")):
+                if idx < len(future_second_level_ids):
+                    first, second = future_second_level_ids[idx]
+                    th['id'] = first + "||" + second
+
+            # Third header row: assign id from future_third_level_ids
+            for idx, th in enumerate(third_header.find_all("th")):
+                if idx < len(future_third_level_ids):
+                    first, second, third = future_third_level_ids[idx]
+                    th['id'] = first + "||" + second + "||" + third
+            
+            # add delete buttons for columns
             third_header = header_rows[2]
             ths = third_header.find_all("th")
             for idx, th in enumerate(ths):
+                # No attribute for first level header
                 col_name = th.get_text(strip=True)
                 # Skip the index column and action columns
                 if col_name and col_name not in ColNotToShow:

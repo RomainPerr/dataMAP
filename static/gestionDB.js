@@ -585,6 +585,8 @@ document.addEventListener('DOMContentLoaded', function() {
         Array.from(row.cells).forEach((cell, cellIdx) => {
             cell.style.cursor = 'pointer';
             cell.addEventListener('mousedown', function(e) {
+                // Only start selection if not clicking on an input or textarea (for editing)
+                if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
                 selecting = true;
                 startRow = rowIdx;
                 endRow = rowIdx;
@@ -593,7 +595,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 highlightCells();
                 document.addEventListener('mousemove', onMouseMove);
                 document.addEventListener('mouseup', onMouseUp);
-                e.preventDefault();
+                // Only prevent default if not currently editing a cell
+                const editing = !!table.querySelector('input[type="text"]:focus');
+                if (!editing) {
+                    e.preventDefault(); // Removed to allow normal mouse behavior for editing
+                }
             });
         });
     });
@@ -613,7 +619,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    function onMouseUp(e) {
+    function onMouseUp() {
         selecting = false;
         document.removeEventListener('mousemove', onMouseMove);
         document.removeEventListener('mouseup', onMouseUp);
@@ -690,5 +696,126 @@ document.addEventListener('DOMContentLoaded', function() {
                 cell.classList.remove('cell-selected');
             });
         }
+    });
+});
+
+//EDIT CELL
+document.addEventListener('DOMContentLoaded', function() {
+    const table = document.querySelector('#mainTable');
+    if (!table) return;
+
+    table.addEventListener('dblclick', function(e) {
+        document.body.style.userSelect = 'auto';
+        let cell = e.target;
+        if (!(cell instanceof HTMLTableCellElement)) return;
+        // Prevent editing header cells (optional)
+        var isColumnTitle = false;
+        if (cell.tagName === 'TH') isColumnTitle = true;
+        // Prevent multiple editors
+        if (cell.querySelector('input')) return;
+        // Prevent editing the index column (assume first column is index)
+        if (cell.cellIndex === 0) return;
+
+        var originalValue = cell.innerText;
+        if (cell.querySelector('button')) {
+            // Clone the cell, remove buttons, and get the text
+            const clone = cell.cloneNode(true);
+            Array.from(clone.querySelectorAll('button')).forEach(btn => btn.remove());
+            originalValue = clone.innerText.trim();
+        }
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.value = originalValue;
+        input.style.width = '100%';
+        input.style.boxSizing = 'border-box';
+        // If the cell contains a single button and nothing else, do not allow editing
+        const onlyButton = cell.children.length === 1 && cell.firstElementChild.tagName === 'BUTTON';
+        if (onlyButton) {
+            return;
+        }
+
+        
+
+        cell.innerText = '';
+        cell.appendChild(input);
+        input.focus();
+        input.select();
+
+        function finishEdit(save) {
+            const newValue = input.value;
+            if (save && newValue !== originalValue && !isColumnTitle) {
+                // Get the column title from the third row (index 2) of the column
+                const colIndex = cell.cellIndex;
+                const table = cell.closest('table');
+                let colTitle = '';
+                if (table && table.rows.length > 2 && table.rows[2].cells.length > colIndex) {
+                    colTitle = table.rows[2].cells[colIndex].innerText.split('\n')[0];
+                }
+                // Use the content of the first column as the row identifier
+                const rowIndex = cell.parentElement.rowIndex;
+                const tableRow = cell.parentElement;
+                let rowIdentifier = '';
+                if (tableRow && tableRow.cells.length > 0) {
+                    rowIdentifier = tableRow.cells[0].innerText;
+                }
+                fetch('/updateCell', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        row: rowIdentifier,
+                        col: colTitle,
+                        value: newValue
+                    })
+                }).then(
+                    response => {
+                        if (response.ok) {
+                            location.reload();
+                        } else {
+                            console.error('Error updating cell:', response.statusText);
+                        }
+                    }
+                );
+            }else if(isColumnTitle){
+                // Only if second or third level header, else []
+                let headerID = cell.getAttribute('id').split('||');
+                const newHeaderValue = input.value;
+
+                fetch('/updateHeaderNames', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        header: originalValue,
+                        headerID: headerID,
+                        newHeaderValue: newHeaderValue
+                    })
+                }).then(
+                    response => {
+                        if (response.ok) {
+                            location.reload();
+                        } else {
+                            console.error('Error updating header names:', response.statusText);
+                        }
+                    }
+                );
+            }else{
+                cell.innerText = originalValue;
+            }
+        }
+
+        input.addEventListener('keydown', function(ev) {
+            if (ev.key === 'Enter') {
+                finishEdit(true);
+            } else if (ev.key === 'Escape') {
+                finishEdit(false);
+            }
+        });
+
+        input.addEventListener('blur', function() {
+            finishEdit(true);
+        });
     });
 });

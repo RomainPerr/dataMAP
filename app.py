@@ -124,6 +124,8 @@ def render(db):
     global current_df
     global current_df_name
     global current_filter
+    
+    
 
     if db == 'pas de base de données spécifiée':
         return "No database specified. Please select a database from the menu.", 400
@@ -354,4 +356,37 @@ def exportData():
             # Reconstruct the whole dataframe as a tab-separated string with newlines between rows
             tsv_data = df_filtered.to_csv(sep='\t', index=False, header=True, lineterminator='\n', encoding='utf-8')
             return json.dumps(tsv_data), 200, {'Content-Type': 'application/json; charset=utf-8'}
+    return '', 204
+
+@app.route('/updateCell', methods=['POST'])
+def updateCell():
+    global current_df
+
+    data = request.get_json()
+    row = data.get('row')
+    col = data.get('col')
+    value = data.get('value')
+
+    current_df[gestionDB.simpleColumnsNamesToCompleteColumnsNames(col, current_df)].iloc[int(row)] = value
+
+    return '', 204
+
+@app.route('/updateHeaderNames', methods=['POST'])
+def updateHeaderNames():
+    global current_df
+
+    data = request.get_json()
+    headerID = data.get('headerID')
+    newName = data.get('newHeaderValue')
+    # Replace headers in current_df.columns that start with headerID by newName
+    new_columns = []
+    for col in current_df.columns:
+        if isinstance(col, tuple) and col[:len(headerID)] == tuple(headerID):
+            # Replace the last element in headerID with newName, keep the rest of the tuple
+            new_col = tuple(list(col[:len(headerID)-1]) + [newName] + list(col[len(headerID):]))
+            new_columns.append(new_col)
+        else:
+            new_columns.append(col)
+    current_df.columns = pd.MultiIndex.from_tuples(new_columns)        
+
     return '', 204
