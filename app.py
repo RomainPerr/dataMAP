@@ -7,6 +7,8 @@ from wtforms.validators import InputRequired
 
 import json
 from flask_wtf.csrf import generate_csrf
+from io import BytesIO
+import pandas as pd
 
 import gestionDB # functions related to the data display and data management
 
@@ -309,17 +311,47 @@ def applyFilters():
         current_filter["Etiquettes"] = get_all_labels_with_children(selected_labels, classified_labels)
     return '', 204
 
-# @app.route('/exportData', methods=['POST'])
-# def exportData():
-#     global current_df
-#     df = current_df
-#     format = request.get_json().get('format')
-#     cols = request.get_json().get('cols', [])
-#     if format and cols:
-#         if format == 'csv':
-#             # CSV export logic here
-#         elif format == 'xlsx':
-#             # XLSX export logic here
-#         elif format == 'raw':
-#             # Raw text export logic here
-#     return '', 204
+
+@app.route('/exportData', methods=['POST'])
+def exportData():
+    global current_df
+    df = current_df
+    format = request.get_json().get('format')
+    cols = request.get_json().get('columns', [])
+    df_filtered = gestionDB.filter_df(df, current_filter=current_filter)
+    df_filtered = df_filtered[gestionDB.simpleColumnsNamesToCompleteColumnsNames(cols, df_filtered)]
+    
+    # Only keep third layer headers (level 2 in zero-based indexing)
+    df_filtered.columns = [col[-1] for col in df_filtered.columns]
+    # Remove leading and trailing rows where all columns are empty
+    def is_row_empty(row):
+        return all((pd.isna(x) or str(x).strip() == "") for x in row)
+
+    if not df_filtered.empty:
+        # Remove any totally empty row (all columns empty or NaN)
+        df_filtered = df_filtered[~df_filtered.apply(is_row_empty, axis=1)]
+
+    if format and cols:
+        if format == 'csv':
+            if df_filtered is None or df_filtered.empty or not cols:
+                return 'No data to export.', 400
+            response = make_response(df_filtered.to_csv(index=False, encoding='utf-8-sig'))
+            response.headers['Content-Disposition'] = 'attachment; filename=data.csv'
+            response.headers['Content-Type'] = 'text/csv; charset=utf-8'
+            return response
+        elif format == 'xlsx':
+            output = BytesIO()
+            with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                df_filtered.to_excel(writer, index=False, sheet_name='Sheet1')
+            output.seek(0)
+            response = make_response(output.read())
+            response.headers['Content-Disposition'] = 'attachment; filename=data.xlsx'
+            response.headers['Content-Type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            return response
+        elif format == 'raw':
+            if len(cols) == 1:
+                df_filtered = df_filtered[df_filtered[cols[0]].astype(str).str.strip() != ""]
+            # Reconstruct the whole dataframe as a tab-separated string with newlines between rows
+            tsv_data = df_filtered.to_csv(sep='\t', index=False, header=True, lineterminator='\n', encoding='utf-8')
+            return json.dumps(tsv_data), 200, {'Content-Type': 'application/json; charset=utf-8'}
+    return '', 204

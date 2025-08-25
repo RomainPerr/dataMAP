@@ -45,34 +45,34 @@ def append_row(df, row):
 def filter_df_by_column(df, column_name, value):
     return df[df[column_name].str.contains(value, na=False)]
 
-
-# Function to convert DataFrame to HTML shown in gestionDB.html
-def df_to_html(df, ColNotToShow, current_filter):
+def filter_df(df, current_filter):
     df = df.fillna('')
-    if isinstance(df.columns, pd.MultiIndex):
-        nom_cols = []
-        for col in df.columns:
-            if col[2] in ColNotToShow:
-                nom_cols.append(col)
-        df_toshow = df.drop(columns=nom_cols, errors='ignore')
-    else:
-        df_toshow = df.drop(columns=ColNotToShow, errors='ignore')
-    
     
     if current_filter:
         for key, values in current_filter.items():
             if "non rempli" in values:
                 values += ['']
-            print("ZZZZZZ"*60)
-            print(df_toshow[("","", "Etiquettes")].head())
             if key == "Etiquettes":
-                df_toshow = df_toshow[df_toshow[("","", "Etiquettes")].apply(lambda etiquettes: any(e in values for e in etiquettes if isinstance(etiquettes, list)))]
+                df = df[df[("","", "Etiquettes")].apply(lambda etiquettes: any(e in values for e in etiquettes if isinstance(etiquettes, list)))]
             else:
-                df_toshow = df_toshow[df_toshow[simpleColumnsNamesToCompleteColumnsNames(key, df)].isin(values)]
+                df = df[df[simpleColumnsNamesToCompleteColumnsNames(key, df)].isin(values)]
+
+    df = df.drop(columns=[("","", "Etiquettes")], errors='ignore')
+    return df
+
+# Function to convert DataFrame to HTML shown in gestionDB.html
+def df_to_html(df, ColNotToShow, current_filter):
+    df_toshow = filter_df(df, current_filter=current_filter)
+
+    if isinstance(df_toshow.columns, pd.MultiIndex):
+        nom_cols = []
+        for col in df_toshow.columns:
+            if col[2] in ColNotToShow:
+                nom_cols.append(col)
+        df_toshow = df_toshow.drop(columns=nom_cols, errors='ignore')
+    else:
+        df_toshow = df_toshow.drop(columns=ColNotToShow, errors='ignore')
             
-
-    df_toshow = df_toshow.drop(columns=[("","", "Etiquettes")], errors='ignore')
-
     df_toshow = df_toshow.reset_index()
     df_toshow = df_toshow.to_html(classes='table table-striped', index=False)
 
@@ -81,6 +81,7 @@ def df_to_html(df, ColNotToShow, current_filter):
     soup = BeautifulSoup(df_toshow, "html.parser")
     table = soup.find("table")
     if table:
+        table['id'] = "mainTable"
         # Add a delete button to each column header (third header row)
         header_rows = table.find_all("tr")
         if len(header_rows) >= 3:

@@ -71,7 +71,36 @@
         <button onclick="openFilterModal()">Filtrer</button>
 
         <!-- Export Modal -->
-        
+        <div id="exportModal" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.5); align-items:center; justify-content:center; z-index:1000; overflow:auto;">
+            <div style="background:white; padding:20px; border-radius:8px; min-width:400px; max-width:600px; max-height:90vh; overflow:auto;">
+                <h2>Exporter les données</h2>
+                <form id="exportForm" style="display:flex; flex-direction:column; gap:16px;">
+                    <div>
+                        <label><strong>Colonnes à exporter :</strong></label>
+                        <div id="exportColumns" style="display:flex; flex-wrap:wrap; gap:12px; margin-top:8px;">
+                            <!-- Columns checkboxes injected by JS -->
+                        </div>
+                    </div>
+                    <div>
+                        <label><strong>Format :</strong></label>
+                        <div style="margin-top:8px;">
+                            <label><input type="radio" name="exportFormat" value="csv" checked> CSV</label>
+                            <label style="margin-left:16px;"><input type="radio" name="exportFormat" value="xlsx"> XLSX</label>
+                            <label style="margin-left:16px;"><input type="radio" name="exportFormat" value="raw"> Copier texte brut</label>
+                        </div>
+                    </div>
+                    <div id="rawExportArea" style="display:none; margin-top:8px;">
+                        <textarea id="rawExportText" style="width:100%; height:120px;" readonly></textarea>
+                        <button type="button" onclick="copyRawExport()">Copier</button>
+                    </div>
+                    <div style="text-align:right; margin-top:16px;">
+                        <button type="button" onclick="submitExport()">Exporter</button>
+                        <button type="button" onclick="closeExportModal()">Fermer</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        <button onclick="openExportModal()">Exporter</button>
 
 
         <div style="display: flex; align-items: flex-start; margin-top: 20px; margin-bottom: 20px;">

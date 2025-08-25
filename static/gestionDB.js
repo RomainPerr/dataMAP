@@ -454,86 +454,241 @@ function unselectAll(col) {
 
 // EXPORT MODAL
 
-// function openExportModal() {
-//     document.getElementById('exportModal').style.display = 'flex';
-//     renderExportColumns();
-//     document.getElementById('rawExportArea').style.display = 'none';
-// }
-// function closeExportModal() {
-//     document.getElementById('exportModal').style.display = 'none';
-// }
-// function renderExportColumns() {
-//     const container = document.getElementById('exportColumns');
-//     container.innerHTML = '';
-//     (shownColumns || []).forEach(col => {
-//         const div = document.createElement('div');
-//         div.innerHTML = `<label><input type="checkbox" name="exportCols" value="${col}" checked> ${col}</label>`;
-//         container.appendChild(div);
-//     });
-// }
-// document.querySelectorAll('input[name="exportFormat"]').forEach(el => {
-//     el.addEventListener('change', function() {
-//         if (this.value === 'raw') {
-//             showRawExport();
-//         } else {
-//             document.getElementById('rawExportArea').style.display = 'none';
-//         }
-//     });
-// });
-// function getSelectedExportColumns() {
-//     return Array.from(document.querySelectorAll('#exportColumns input[type=checkbox]:checked')).map(cb => cb.value);
-// }
-// function submitExport() {
-//     const format = document.querySelector('input[name="exportFormat"]:checked').value;
-//     const cols = getSelectedExportColumns();
-//     if (cols.length === 0) {
-//         alert('Sélectionnez au moins une colonne.');
-//         return;
-//     }
-//     if (format === 'raw') {
-//         showRawExport();
-//         return;
-//     }
-//     fetch('/exportData', {
-//         method: 'POST',
-//         headers: {'Content-Type': 'application/json'},
-//         body: JSON.stringify({columns: cols, format: format})
-//     })
-//     .then(response => {
-//         if (format === 'csv' || format === 'xlsx') {
-//             return response.blob();
-//         }
-//         return response.text();
-//     })
-//     .then(data => {
-//         if (format === 'csv' || format === 'xlsx') {
-//             const ext = format === 'csv' ? 'csv' : 'xlsx';
-//             const url = window.URL.createObjectURL(data);
-//             const a = document.createElement('a');
-//             a.href = url;
-//             a.download = `export.${ext}`;
-//             document.body.appendChild(a);
-//             a.click();
-//             a.remove();
-//             window.URL.revokeObjectURL(url);
-//         }
-//     });
-// }
-// function showRawExport() {
-//     const cols = getSelectedExportColumns();
-//     fetch('/exportData', {
-//         method: 'POST',
-//         headers: {'Content-Type': 'application/json'},
-//         body: JSON.stringify({columns: cols, format: 'raw'})
-//     })
-//     .then(response => response.text())
-//     .then(text => {
-//         document.getElementById('rawExportText').value = text;
-//         document.getElementById('rawExportArea').style.display = 'block';
-//     });
-// }
-// function copyRawExport() {
-//     const textarea = document.getElementById('rawExportText');
-//     textarea.select();
-//     document.execCommand('copy');
-// }
+function openExportModal() {
+    document.getElementById('exportModal').style.display = 'flex';
+    renderExportColumns();
+    document.getElementById('rawExportArea').style.display = 'none';
+}
+function closeExportModal() {
+    document.getElementById('exportModal').style.display = 'none';
+}
+function renderExportColumns() {
+    const container = document.getElementById('exportColumns');
+    container.innerHTML = '';
+    (shownColumns || []).forEach(col => {
+        const div = document.createElement('div');
+        div.innerHTML = `<label><input type="checkbox" name="exportCols" value="${col}"> ${col}</label>`;
+        container.appendChild(div);
+    });
+}
+document.querySelectorAll('input[name="exportFormat"]').forEach(el => {
+    el.addEventListener('change', function() {
+        if (this.value === 'raw') {
+            showRawExport();
+        } else {
+            document.getElementById('rawExportArea').style.display = 'none';
+        }
+    });
+});
+function getSelectedExportColumns() {
+    return Array.from(document.querySelectorAll('#exportColumns input[type=checkbox]:checked')).map(cb => cb.value);
+}
+function submitExport() {
+    const format = document.querySelector('input[name="exportFormat"]:checked').value;
+    const cols = getSelectedExportColumns();
+    if (cols.length === 0) {
+        alert('Sélectionnez au moins une colonne.');
+        return;
+    }
+    if (format === 'raw') {
+        showRawExport();
+        return;
+    }
+    fetch('/exportData', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({columns: cols, format: format})
+    })
+    .then(response => {
+        if (format === 'csv' || format === 'xlsx') {
+            return response.blob();
+        }
+        return response.text();
+    })
+    .then(data => {
+        if (format === 'csv' || format === 'xlsx') {
+            const ext = format === 'csv' ? 'csv' : 'xlsx';
+            const url = window.URL.createObjectURL(data);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `export.${ext}`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(url);
+        }
+    });
+}
+function showRawExport() {
+    const cols = getSelectedExportColumns();
+    fetch('/exportData', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json; charset=utf-8'},
+        body: JSON.stringify({columns: cols, format: 'raw'})
+    })
+    .then(response => response.json())
+    .then(tsv_data => {
+        // tsv_data is a string, but may have unicode escapes
+        let processed = tsv_data;
+        // Decode unicode escapes (e.g., \u00e9)
+        processed = processed.replace(/\\u([\dA-F]{4})/gi, function (match, grp) {
+            return String.fromCharCode(parseInt(grp, 16));
+        });
+        // Remove leading/trailing quotes if present
+        processed = processed.replace(/^"|"$/g, '');
+        // Replace escaped newlines and tabs
+        processed = processed.replace(/\\n/g, '\n').replace(/\\t/g, '\t');
+
+        document.getElementById('rawExportText').textContent = processed;
+        document.getElementById('rawExportArea').style.display = 'block';
+    }).then(copyRawExport);
+    
+}
+function copyRawExport() {
+    const textarea = document.getElementById('rawExportText');
+    const lines = textarea.value.split('\n');
+    if (lines.length > 1) {
+        const textToCopy = lines.slice(1).join('\n');
+        navigator.clipboard.writeText(textToCopy).then(() => {
+        });
+    } else {
+        alert('Aucune donnée à copier.');
+    }
+}
+
+// VERTICAL SELECTION
+
+document.addEventListener('DOMContentLoaded', function() {
+    const table = document.querySelector('#mainTable');
+    if (!table) return;
+
+    let selecting = false;
+    let startRow = null, endRow = null;
+    let startCol = null, endCol = null;
+
+    // Add a class for highlighting
+    const style = document.createElement('style');
+    style.innerHTML = `
+        .cell-selected {
+            background: #c8e6c9 !important;
+        }
+    `;
+    document.head.appendChild(style);
+
+    // Helper to get cell's column index
+    function getColIndex(cell) {
+        return Array.from(cell.parentNode.children).indexOf(cell);
+    }
+
+    // Mouse events for all cells
+    Array.from(table.rows).forEach((row, rowIdx) => {
+        Array.from(row.cells).forEach((cell, cellIdx) => {
+            cell.style.cursor = 'pointer';
+            cell.addEventListener('mousedown', function(e) {
+                selecting = true;
+                startRow = rowIdx;
+                endRow = rowIdx;
+                startCol = cellIdx;
+                endCol = cellIdx;
+                highlightCells();
+                document.addEventListener('mousemove', onMouseMove);
+                document.addEventListener('mouseup', onMouseUp);
+                e.preventDefault();
+            });
+        });
+    });
+
+    function onMouseMove(e) {
+        if (!selecting) return;
+        const cell = document.elementFromPoint(e.clientX, e.clientY);
+        if (!cell || (cell.tagName !== 'TD' && cell.tagName !== 'TH')) return;
+        const row = cell.parentNode;
+        if (!row || !row.parentNode) return;
+        const rowIdx = Array.from(table.rows).indexOf(row);
+        const cellIdx = getColIndex(cell);
+        if (rowIdx !== -1 && cellIdx !== -1) {
+            endRow = rowIdx;
+            endCol = cellIdx;
+            highlightCells();
+        }
+    }
+
+    function onMouseUp(e) {
+        selecting = false;
+        document.removeEventListener('mousemove', onMouseMove);
+        document.removeEventListener('mouseup', onMouseUp);
+    }
+
+    function highlightCells() {
+        const minRow = Math.min(startRow, endRow);
+        const maxRow = Math.max(startRow, endRow);
+        const minCol = Math.min(startCol, endCol);
+        const maxCol = Math.max(startCol, endCol);
+        Array.from(table.rows).forEach((row, rIdx) => {
+            Array.from(row.cells).forEach((cell, cIdx) => {
+                if (
+                    rIdx >= minRow && rIdx <= maxRow &&
+                    cIdx >= minCol && cIdx <= maxCol
+                ) {
+                    cell.classList.add('cell-selected');
+                } else {
+                    cell.classList.remove('cell-selected');
+                }
+            });
+        });
+    }
+
+    // Only handle copy if focus is inside the table
+    document.addEventListener('keydown', function(e) {
+        if ((e.ctrlKey || e.metaKey) && e.key === 'c') {
+            const active = document.activeElement;
+            // If focus is on an input, textarea, or contenteditable, let default copy happen
+            if (
+                active &&
+                (
+                    active.tagName === 'INPUT' ||
+                    active.tagName === 'TEXTAREA' ||
+                    active.isContentEditable
+                )
+            ) {
+                return;
+            }
+            // Only handle copy if a selection exists
+            const minRow = Math.min(startRow, endRow);
+            const maxRow = Math.max(startRow, endRow);
+            const minCol = Math.min(startCol, endCol);
+            const maxCol = Math.max(startCol, endCol);
+            // Check if a selection is present (not just a single cell)
+            if (startRow === null || startCol === null || endRow === null || endCol === null) {
+                return;
+            }
+            const selected = [];
+            for (let r = minRow; r <= maxRow; r++) {
+                const row = table.rows[r];
+                if (!row) continue;
+                const rowData = [];
+                for (let c = minCol; c <= maxCol; c++) {
+                    if (row.cells[c]) {
+                        rowData.push(row.cells[c].innerText);
+                    }
+                }
+                selected.push(rowData.join('\t'));
+            }
+            if (selected.length > 0) {
+                const text = selected.join('\n');
+                navigator.clipboard.writeText(text);
+                e.preventDefault();
+            }
+        }
+    });
+
+    // Remove selection when clicking outside the table
+    document.addEventListener('mousedown', function(e) {
+        if (!table.contains(e.target)) {
+            startRow = endRow = startCol = endCol = null;
+            Array.from(table.querySelectorAll('.cell-selected')).forEach(cell => {
+                cell.classList.remove('cell-selected');
+            });
+        }
+    });
+});
