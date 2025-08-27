@@ -41,36 +41,192 @@ function deleteColumn(colName) {
     });
 }
 
+//add column constructor (injects options)
+window.addEventListener('DOMContentLoaded', function() {
+    const titres1 = [];
+    const titres2 = [];
+    const titres3 = [];
+    if (Array.isArray(columns)) {
+        columns.forEach(col => {
+            if (col[0] && !titres1.includes(col[0])) titres1.push(col[0]);
+            if (col[1] && !titres2.includes(col[1])) titres2.push(col[1]);
+            if (col[2] && !titres3.includes(col[2])) titres3.push(col[2]);
+        });
+    }
+    const datalists = [
+        { id: 'titres1', values: titres1 },
+        { id: 'titres2', values: titres2 },
+        { id: 'titres3', values: titres3 }
+    ];
+    datalists.forEach(dl => {
+        const datalist = document.getElementById(dl.id);
+        if (datalist) {
+            datalist.innerHTML = '';
+            dl.values.forEach(col => {
+                const option = document.createElement('option');
+                option.value = col;
+                datalist.appendChild(option);
+            });
+        }
+    });
+});
+
+// ADD ROW
+
+function listToDicKey(key) {
+    return key[0] + "||" + key[1] + "||" + key[2];
+}
+
+document.addEventListener("DOMContentLoaded", function() {
+    // Inject input fields for each column
+    const row = document.getElementById('addRowInputsContainer');
+    const shownColumns = beautifyColumnNames(columns);
+    columns.forEach((col, idx) => {
+        const td = document.createElement('td');
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.name = listToDicKey(col);
+        input.setAttribute('data-column', JSON.stringify(col));
+        input.placeholder = shownColumns[idx];
+        td.appendChild(input);
+        row.appendChild(td);
+    });
+});
+
+        function submitAddRow() {
+            const form = document.getElementById('addRowForm');
+            const formData = new FormData(form);
+            const data = {};
+
+            formData.entries().forEach(([key, value]) => {
+                data[key] = value;
+            });
+
+            fetch('/appendRow', {
+                method: "POST",
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(data),
+            })
+            .then(response => {
+                if (response.ok) {
+                    location.reload();
+                } else {
+                    alert("Erreur lors de l'ajout de la ligne.");
+                }
+            })
+            .catch(() => alert("Erreur réseau lors de l'ajout de la ligne."));
+        }
+
+
+
+
+function beautifyColumnNames(columns) {
+    if (Array.isArray(columns) && typeof columns[0] === 'string' && columns[0].includes('||')) {
+        columns = columns.map(col => col.split('||'));
+    }
+    let colsToShow = [];
+
+    let identicalIndexes1 = [];
+    let identicalIndexes2 = [];
+    columns.forEach(col => {
+        colsToShow.forEach((showCol, idx) => {
+            if (showCol[showCol.length - 1] === col[2]) {
+                identicalIndexes1.push(idx);
+            }
+        });
+        if (identicalIndexes1.length > 0) {
+            colsToShow.forEach((showCol, idx) => {
+                if (identicalIndexes1.includes(idx)) {
+                    if (showCol[1] === col[1]) {
+                        identicalIndexes2.push(idx);
+                    }
+                }
+            });
+        }
+
+        colsToShow.push(col[2]);
+
+        identicalIndexes1.forEach(index1 => {
+            colsToShow[index1] = columns[index1][1] + " > " + columns[index1][2];
+            colsToShow[colsToShow.length - 1] = col[1] + " > " + col[2];
+        });
+
+        identicalIndexes2.forEach(index2 => {
+            colsToShow[index2] = columns[index2][0] + " > " + columns[index2][1] + " > " + columns[index2][2];
+            colsToShow[colsToShow.length - 1] = col[0] + " > " + col[1] + " > " + col[2];
+        });
+    });
+
+    return colsToShow;
+}
+
 //functions regarding "détails"
 function openAffichageModal() { // management of "détails" columns
     fetch('/getAffichageData')
         .then(response => response.json())
         .then(data => {
-            const detailCols = data["Colonnes en détails"];
+            let detailCols = data["Colonnes en détails"];
             const allCols = data["Toutes les colonnes"];
-            const otherCols = allCols.filter(col => !detailCols.includes(col));
+            let otherCols = allCols.filter(
+                col => !detailCols.some(
+                    dcol => Array.isArray(dcol) && Array.isArray(col) && dcol.length === col.length && dcol.every((v, i) => v === col[i])
+                )
+            );
+
+            // Sort detailCols and otherCols according to the order in columns
+            function sortByColumnsOrder(cols) {
+                // Ensure both cols and columns are arrays of arrays of strings
+                return cols.slice().sort((a, b) => {
+                    // Find the index of a in columns
+                    const aIdx = columns.findIndex(c =>
+                        Array.isArray(c) && Array.isArray(a) &&
+                        c.length === a.length &&
+                        c.every((v, i) => v === a[i])
+                    );
+                    const bIdx = columns.findIndex(c =>
+                        Array.isArray(c) && Array.isArray(b) &&
+                        c.length === b.length &&
+                        c.every((v, i) => v === b[i])
+                    );
+                    // If not found, put at the end
+                    return (aIdx === -1 ? Number.MAX_SAFE_INTEGER : aIdx) -
+                           (bIdx === -1 ? Number.MAX_SAFE_INTEGER : bIdx);
+                });
+            }
+            detailCols = sortByColumnsOrder(detailCols);
+            console.log(columns);
+            console.log(detailCols);
+            otherCols = sortByColumnsOrder(otherCols);
 
             const detailList = document.getElementById('detailCols');
             const otherList = document.getElementById('otherCols');
             detailList.innerHTML = '';
             otherList.innerHTML = '';
 
-            detailCols.forEach(col => {
+            let concatenateCols = detailCols.concat(otherCols);
+            concatenateCols = beautifyColumnNames(concatenateCols);
+
+            detailColsToShow = concatenateCols.slice(0, detailCols.length);
+            otherColsToShow = concatenateCols.slice(detailCols.length);
+
+            detailCols.forEach((col, idx) => {
                 let li = document.createElement('li');
-                li.textContent = col;
+                li.textContent = detailColsToShow[idx];
                 li.draggable = true;
                 li.ondragstart = drag;
                 li.style.cursor = 'grab';
-                li.setAttribute('data-col', col);
+                li.setAttribute('data-col', JSON.stringify(col));
                 detailList.appendChild(li);
             });
-            otherCols.forEach(col => {
+            otherCols.forEach((col, idx) => {
                 let li = document.createElement('li');
-                li.textContent = col;
+                li.textContent = otherColsToShow[idx];
                 li.draggable = true;
                 li.ondragstart = drag;
                 li.style.cursor = 'grab';
-                li.setAttribute('data-col', col);
+                li.setAttribute('data-col', JSON.stringify(col));
                 otherList.appendChild(li);
             });
 
@@ -98,6 +254,8 @@ function drop(ev, targetId) {
     if (sourceId === targetId) return;
     const sourceList = document.getElementById(sourceId);
     const targetList = document.getElementById(targetId);
+
+    // Move the dragged item
     let draggedItem;
     Array.from(sourceList.children).forEach(li => {
         if (li.getAttribute('data-col') === col) {
@@ -107,10 +265,38 @@ function drop(ev, targetId) {
     if (draggedItem) {
         targetList.appendChild(draggedItem);
     }
+
+    // After drop, re-sort both lists to match the order in columns
+    function sortListByColumnsOrder(list) {
+        const items = Array.from(list.children);
+        items.sort((a, b) => {
+            const aCol = JSON.parse(a.getAttribute('data-col'));
+            const bCol = JSON.parse(b.getAttribute('data-col'));
+            const aIdx = columns.findIndex(c =>
+                Array.isArray(c) && Array.isArray(aCol) &&
+                c.length === aCol.length &&
+                c.every((v, i) => v === aCol[i])
+            );
+            const bIdx = columns.findIndex(c =>
+                Array.isArray(c) && Array.isArray(bCol) &&
+                c.length === bCol.length &&
+                c.every((v, i) => v === bCol[i])
+            );
+            // If not found, put at the end
+            return (aIdx === -1 ? Number.MAX_SAFE_INTEGER : aIdx) -
+                   (bIdx === -1 ? Number.MAX_SAFE_INTEGER : bIdx);
+        });
+        items.forEach(item => list.appendChild(item));
+    }
+    sortListByColumnsOrder(sourceList);
+    sortListByColumnsOrder(targetList);
 }
 
 function submitAffichage() {
-    const detailCols = Array.from(document.getElementById('detailCols').children).map(li => li.getAttribute('data-col'));
+    const detailCols = Array.from(document.getElementById('detailCols').children)
+        .map(li => JSON.parse(li.getAttribute('data-col')));
+    console.log("Colonnes en détails soumises :", detailCols);
+    debugger;
     fetch('/setdetailcontent', {
         method: 'POST',
         headers: {
@@ -302,6 +488,13 @@ function openFilterModal() {
     document.getElementById('filterModal').style.display = 'flex';
     renderFilterColumns();
 }
+
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape' && document.getElementById('filterModal').style.display === 'flex') {
+        closeFilterModal();
+    }
+});
+
 function closeFilterModal() {
     document.getElementById('filterModal').style.display = 'none';
 }
@@ -331,15 +524,17 @@ function renderFilterColumns() {
     `;
     etiquettesDiv.setAttribute('data-col-index', -1);
     labelsContainer.appendChild(etiquettesDiv);
+    
+    let shownColumnsTitles = beautifyColumnNames(shownColumns);
 
     const container = document.getElementById('filterColumns');
     container.innerHTML = '';
-    shownColumns.forEach(col => {
+    shownColumns.forEach((col, idx) => {
         const labels = filterData[col] || [];
         const colDiv = document.createElement('div');
         colDiv.style.minWidth = '180px';
         colDiv.innerHTML = `
-            <div style="font-weight:bold; margin-bottom:4px;">${col}</div>
+            <div style="font-weight:bold; margin-bottom:4px;">${shownColumnsTitles[idx]}</div>
             <input type="text" placeholder="Rechercher..." oninput="filterLabels('${col}', this.value)" style="width:100%; margin-bottom:8px;" id="search_${col}">
             <div style="display: flex; gap: 40px; margin-bottom: 16px;">
                 <button type="button" onclick="unselectAll('${col}')">Tout désélectionner</button>
@@ -368,7 +563,7 @@ function filterLabels(col, search, isInitialRender = false) {
     const labelsDiv = document.getElementById('labels_' + col);
     // Get the text content of all label elements inside labelsDiv
     let labels = [];
-    if (col != "Etiquettes") {
+    if (col != "||||Etiquettes") {
         labels = filterData[col] || [];
     }else{
         labels = attachedLabels;
@@ -459,15 +654,27 @@ function openExportModal() {
     renderExportColumns();
     document.getElementById('rawExportArea').style.display = 'none';
 }
+
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape' && document.getElementById('exportModal').style.display === 'flex') {
+        closeExportModal();
+    }
+});
+
 function closeExportModal() {
     document.getElementById('exportModal').style.display = 'none';
 }
 function renderExportColumns() {
     const container = document.getElementById('exportColumns');
     container.innerHTML = '';
-    (shownColumns || []).forEach(col => {
+    let shownColumns = beautifyColumnNames(columns);
+    (columns || []).forEach((col, idx) => {
         const div = document.createElement('div');
-        div.innerHTML = `<label><input type="checkbox" name="exportCols" value="${col}"> ${col}</label>`;
+        // Store the original col (array) as a JSON string in a data attribute
+        div.innerHTML = `<label>
+            <input type="checkbox" name="exportCols" value="${idx}" data-col='${JSON.stringify(col)}'> 
+            ${shownColumns[idx] || col}
+        </label>`;
         container.appendChild(div);
     });
 }
@@ -481,11 +688,13 @@ document.querySelectorAll('input[name="exportFormat"]').forEach(el => {
     });
 });
 function getSelectedExportColumns() {
-    return Array.from(document.querySelectorAll('#exportColumns input[type=checkbox]:checked')).map(cb => cb.value);
+    return Array.from(document.querySelectorAll('#exportColumns input[type=checkbox]:checked'))
+        .map(cb => JSON.parse(cb.getAttribute('data-col')));
 }
 function submitExport() {
     const format = document.querySelector('input[name="exportFormat"]:checked').value;
     const cols = getSelectedExportColumns();
+    console.log(cols);
     if (cols.length === 0) {
         alert('Sélectionnez au moins une colonne.');
         return;
@@ -548,7 +757,7 @@ function copyRawExport() {
     const textarea = document.getElementById('rawExportText');
     const lines = textarea.value.split('\n');
     if (lines.length > 1) {
-        const textToCopy = lines.slice(1).join('\n');
+        const textToCopy = lines.slice(3).join('\n');
         navigator.clipboard.writeText(textToCopy).then(() => {
         });
     } else {
@@ -575,9 +784,21 @@ document.addEventListener('DOMContentLoaded', function() {
     `;
     document.head.appendChild(style);
 
-    // Helper to get cell's column index
+    // Helper to get cell's column index (counting all cells, including TH/TD)
     function getColIndex(cell) {
-        return Array.from(cell.parentNode.children).indexOf(cell);
+        let colIdx = 0;
+        let c = cell;
+        while (c.previousElementSibling) {
+            colIdx += c.previousElementSibling.colSpan || 1;
+            c = c.previousElementSibling;
+        }
+        return colIdx;
+    }
+
+    // Helper to get cell's row index (counting all rows, including header rows)
+    function getRowIndex(cell) {
+        let row = cell.parentNode;
+        return Array.from(table.rows).indexOf(row);
     }
 
     // Mouse events for all cells
@@ -588,17 +809,17 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Only start selection if not clicking on an input or textarea (for editing)
                 if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
                 selecting = true;
-                startRow = rowIdx;
-                endRow = rowIdx;
-                startCol = cellIdx;
-                endCol = cellIdx;
+                startRow = getRowIndex(cell);
+                endRow = startRow;
+                startCol = getColIndex(cell);
+                endCol = startCol;
                 highlightCells();
                 document.addEventListener('mousemove', onMouseMove);
                 document.addEventListener('mouseup', onMouseUp);
                 // Only prevent default if not currently editing a cell
                 const editing = !!table.querySelector('input[type="text"]:focus');
                 if (!editing) {
-                    e.preventDefault(); // Removed to allow normal mouse behavior for editing
+                    e.preventDefault();
                 }
             });
         });
@@ -607,16 +828,12 @@ document.addEventListener('DOMContentLoaded', function() {
     function onMouseMove(e) {
         if (!selecting) return;
         const cell = document.elementFromPoint(e.clientX, e.clientY);
-        if (!cell || (cell.tagName !== 'TD' && cell.tagName !== 'TH')) return;
-        const row = cell.parentNode;
-        if (!row || !row.parentNode) return;
-        const rowIdx = Array.from(table.rows).indexOf(row);
-        const cellIdx = getColIndex(cell);
-        if (rowIdx !== -1 && cellIdx !== -1) {
-            endRow = rowIdx;
-            endCol = cellIdx;
-            highlightCells();
-        }
+        if (!cell || !(cell.tagName === 'TD' || cell.tagName === 'TH')) return;
+        // Only consider cells inside the main table
+        if (!table.contains(cell)) return;
+        endRow = getRowIndex(cell);
+        endCol = getColIndex(cell);
+        highlightCells();
     }
 
     function onMouseUp() {
@@ -626,20 +843,31 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function highlightCells() {
+        // Always use the min/max of start/end
         const minRow = Math.min(startRow, endRow);
         const maxRow = Math.max(startRow, endRow);
         const minCol = Math.min(startCol, endCol);
         const maxCol = Math.max(startCol, endCol);
+
+        // For each row, track the running col index (to handle colspan)
         Array.from(table.rows).forEach((row, rIdx) => {
-            Array.from(row.cells).forEach((cell, cIdx) => {
+            let colIdx = 0;
+            Array.from(row.cells).forEach(cell => {
+                const cellColStart = colIdx;
+                const cellColEnd = colIdx + (cell.colSpan || 1) - 1;
+                const cellRowStart = rIdx;
+                const cellRowEnd = rIdx + (cell.rowSpan || 1) - 1;
+
+                // If any part of the cell is within the selection rectangle
                 if (
-                    rIdx >= minRow && rIdx <= maxRow &&
-                    cIdx >= minCol && cIdx <= maxCol
+                    cellRowEnd >= minRow && cellRowStart <= maxRow &&
+                    cellColEnd >= minCol && cellColStart <= maxCol
                 ) {
                     cell.classList.add('cell-selected');
                 } else {
                     cell.classList.remove('cell-selected');
                 }
+                colIdx += cell.colSpan || 1;
             });
         });
     }
@@ -660,23 +888,35 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
             // Only handle copy if a selection exists
+            if (
+                startRow === null || startCol === null ||
+                endRow === null || endCol === null
+            ) {
+                return;
+            }
             const minRow = Math.min(startRow, endRow);
             const maxRow = Math.max(startRow, endRow);
             const minCol = Math.min(startCol, endCol);
             const maxCol = Math.max(startCol, endCol);
-            // Check if a selection is present (not just a single cell)
-            if (startRow === null || startCol === null || endRow === null || endCol === null) {
-                return;
-            }
+
+            // Build the selected text, accounting for colspan/rowspan
             const selected = [];
             for (let r = minRow; r <= maxRow; r++) {
                 const row = table.rows[r];
                 if (!row) continue;
-                const rowData = [];
-                for (let c = minCol; c <= maxCol; c++) {
-                    if (row.cells[c]) {
-                        rowData.push(row.cells[c].innerText);
+                let rowData = [];
+                let colIdx = 0;
+                let cellIdx = 0;
+                while (colIdx <= maxCol && cellIdx < row.cells.length) {
+                    const cell = row.cells[cellIdx];
+                    const cellColStart = colIdx;
+                    const cellColEnd = colIdx + (cell.colSpan || 1) - 1;
+                    // If any part of the cell is within the selection
+                    if (cellColEnd >= minCol && cellColStart <= maxCol) {
+                        rowData.push(cell.innerText);
                     }
+                    colIdx += cell.colSpan || 1;
+                    cellIdx++;
                 }
                 selected.push(rowData.join('\t'));
             }
@@ -698,6 +938,9 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 });
+
+
+
 
 //EDIT CELL
 document.addEventListener('DOMContentLoaded', function() {
@@ -726,6 +969,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const input = document.createElement('input');
         input.type = 'text';
         input.value = originalValue;
+        input.style.minWidth = cell.offsetWidth + 'px';
         input.style.width = '100%';
         input.style.boxSizing = 'border-box';
         // If the cell contains a single button and nothing else, do not allow editing
@@ -749,14 +993,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 const table = cell.closest('table');
                 let colTitle = '';
                 if (table && table.rows.length > 2 && table.rows[2].cells.length > colIndex) {
-                    colTitle = table.rows[2].cells[colIndex].innerText.split('\n')[0];
+                    colTitle = JSON.parse(table.rows[2].cells[colIndex].getAttribute("data-id"));
                 }
-                // Use the content of the first column as the row identifier
-                const rowIndex = cell.parentElement.rowIndex;
+
+                // get row index
                 const tableRow = cell.parentElement;
-                let rowIdentifier = '';
+                let rowIndex = '';
                 if (tableRow && tableRow.cells.length > 0) {
-                    rowIdentifier = tableRow.cells[0].innerText;
+                    rowIndex = tableRow.cells[0].innerText;
                 }
                 fetch('/updateCell', {
                     method: 'POST',
@@ -764,7 +1008,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
-                        row: rowIdentifier,
+                        row: rowIndex,
                         col: colTitle,
                         value: newValue
                     })
@@ -779,7 +1023,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 );
             }else if(isColumnTitle){
                 // Only if second or third level header, else []
-                let headerID = cell.getAttribute('id').split('||');
+                let headerID = JSON.parse(cell.getAttribute('data-id'));
                 const newHeaderValue = input.value;
 
                 fetch('/updateHeaderNames', {

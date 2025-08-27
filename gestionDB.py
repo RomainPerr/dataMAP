@@ -5,8 +5,68 @@ from io import BytesIO
 from IPython.display import HTML
 from bs4 import BeautifulSoup
 import json
+from collections import OrderedDict
 
-label_rows_number = 3 # Number of header rows in the Excel file, not really modifiable as is for addColumn() assumes 3
+label_rows_number = 3 # Number of header rows in the Excel file, not really modifiable as is for addColumn() assumes 3 as many other functions
+
+
+#Some basic type helper functions
+def colTupleToString(colTuple):
+    if isinstance(colTuple, list):
+        return ['||'.join(map(str, col)) for col in colTuple]
+    elif isinstance(colTuple, tuple):
+        return '||'.join(map(str, colTuple))
+    else:
+        return str(colTuple)
+
+def colStringToTuple(colString):
+    if isinstance(colString, str):
+        return tuple(colString.split("||"))
+    elif isinstance(colString, list):
+        return [tuple(item.split("||")) for item in colString]
+    return colString
+
+def multiIndexToTuplesList(multiIndex):
+    if isinstance(multiIndex, pd.MultiIndex):
+        return [tuple(map(str, col)) for col in multiIndex]
+    return []
+
+def listsListToTuplesLit(lists):
+    if isinstance(lists, list):
+        return [tuple(map(str, item)) for item in lists]
+    return []
+
+def tuplesListToListsList(tuples):
+    if isinstance(tuples, list):
+        return [list(item) for item in tuples]
+    return []
+
+
+def orderColumns(df):
+    # Order columns by first element, then by second element within each group, preserving original order otherwise
+    cols = list(df.columns)
+    if not cols:
+        return df
+
+    # Group columns by first element, then by second element
+    grouped = OrderedDict()
+    for col in cols:
+        first, second = col[0], col[1]
+        if first not in grouped:
+            grouped[first] = OrderedDict()
+        if second not in grouped[first]:
+            grouped[first][second] = []
+        grouped[first][second].append(col)
+
+    # Reconstruct columns: order by first, then by second, then original order
+    new_cols = []
+    for first_group in grouped.values():
+        for second_group in first_group.values():
+            new_cols.extend(second_group)
+
+    if cols != new_cols:
+        df = df.reindex(columns=new_cols)
+    return df
 
 def read_df(file_path, name, pwd, label_rows_number=3):
 
@@ -55,7 +115,7 @@ def filter_df(df, current_filter):
             if key == "Etiquettes":
                 df = df[df[("","", "Etiquettes")].apply(lambda etiquettes: any(e in values for e in etiquettes if isinstance(etiquettes, list)))]
             else:
-                df = df[df[simpleColumnsNamesToCompleteColumnsNames(key, df)].isin(values)]
+                df = df[df[key].isin(values)]
 
     df = df.drop(columns=[("","", "Etiquettes")], errors='ignore')
     return df
@@ -64,14 +124,7 @@ def filter_df(df, current_filter):
 def df_to_html(df, ColNotToShow, current_filter):
     df_toshow = filter_df(df, current_filter=current_filter)
 
-    if isinstance(df_toshow.columns, pd.MultiIndex):
-        nom_cols = []
-        for col in df_toshow.columns:
-            if col[2] in ColNotToShow:
-                nom_cols.append(col)
-        df_toshow = df_toshow.drop(columns=nom_cols, errors='ignore')
-    else:
-        df_toshow = df_toshow.drop(columns=ColNotToShow, errors='ignore')
+    df_toshow = df_toshow.drop(columns=ColNotToShow, errors='ignore')
             
     df_toshow = df_toshow.reset_index()
 
@@ -109,28 +162,30 @@ def df_to_html(df, ColNotToShow, current_filter):
             # First header row: assign id from future_first_level_ids
             for idx, th in enumerate(first_header.find_all("th")):
                 if idx < len(future_first_level_ids):
-                    th['id'] = future_first_level_ids[idx]
+                    th['data-id'] = json.dumps(future_first_level_ids[idx])
 
             # Second header row: assign id from future_second_level_ids
             for idx, th in enumerate(second_header.find_all("th")):
                 if idx < len(future_second_level_ids):
                     first, second = future_second_level_ids[idx]
-                    th['id'] = first + "||" + second
+                    th['data-id'] = json.dumps(future_second_level_ids[idx])
 
             # Third header row: assign id from future_third_level_ids
             for idx, th in enumerate(third_header.find_all("th")):
                 if idx < len(future_third_level_ids):
                     first, second, third = future_third_level_ids[idx]
-                    th['id'] = first + "||" + second + "||" + third
-            
+                    th['data-id'] = json.dumps(future_third_level_ids[idx])
+
             # add delete buttons for columns
             third_header = header_rows[2]
             ths = third_header.find_all("th")
             for idx, th in enumerate(ths):
                 # No attribute for first level header
-                col_name = th.get_text(strip=True)
+
+                col_name = tuple(json.loads(th.get("data-id")))
+                
                 # Skip the index column and action columns
-                if col_name and col_name not in ColNotToShow:
+                if col_name and col_name not in ColNotToShow and col_name != ("index", "", ""):
                     th.append(soup.new_tag("br"))  # Add a line break before the button
                     th.append(soup.new_string(""))
                     btn = soup.new_tag(
@@ -189,7 +244,7 @@ def df_to_html(df, ColNotToShow, current_filter):
     df_toshow = str(soup)
     return df_toshow
 
-def get_column_names(df, full=False):
+def get_column_names(df, full=True): # the full argument doesn't make sense anymore, I keep it while debugging. Actually the whole function should be obsolete
     if df is not None:
         if full:
             columns=[[], [], []]
@@ -213,13 +268,13 @@ def get_column_names(df, full=False):
         print("No df to handle")
         return []
 
-def row_columns_to_dict(df, rowID, raw_columns): #convert to dictionnary for the "détails" modal to show
+def row_columns_to_dict(df, rowID, columns): #convert to dictionnary for the "détails" modal to show
+    print(columns)
     if df is not None:
         row = df.iloc[int(rowID)]
         if row is not None:
             details = {}
-            for raw_col in raw_columns:
-                col = [c for c in df.columns if str(raw_col) in map(str, c)][0]
+            for col in columns:
                 value = row[col]
                 # Convert pandas Timestamp to string
                 if hasattr(value, 'isoformat'):
@@ -227,16 +282,14 @@ def row_columns_to_dict(df, rowID, raw_columns): #convert to dictionnary for the
                 # Replace NaN with None (will be serialized as null in JSON)
                 if pd.isna(value):
                     value = "Non renseigné"
-                details[str(raw_col)] = value
+                details[col] = value
 
             return json.dumps(details), 200, {'Content-Type': 'application/json'}
     return "Error fetching row details.", 500
 
 def delete_column(df, column_name):
     if df is not None:
-        for col in df.columns:
-            if col[2] == column_name:
-                df = df.drop(columns=col, errors='ignore')
+        df = df.drop(columns=column_name, errors='ignore')
     return df
 
 def add_column(df, request):
@@ -245,29 +298,6 @@ def add_column(df, request):
     col_name_3 = request.form.get('column_name_3')
     df[(col_name_1, col_name_2, col_name_3)] = ""
     
-    titles=[]
-    columns=[]
-    for col in df.columns:
-        if col[0] not in titles:
-            titles.append(col[0])
-            columns.append(col)
-        else:
-            columns.insert((len(titles)-titles[::-1].index(col[0])), col)
-            titles.insert(titles.index(col[0])+1, col[0])
-    df = df.reindex(columns=columns)
-
-    # reorganize columns to join same first and second level titles
-    titles = []
-    columns = []
-    for col in df.columns:
-        if (col[0], col[1]) not in titles:
-            titles.append((col[0], col[1]))
-            columns.append(col)
-        else:
-            columns.insert((len(titles)-titles[::-1].index((col[0], col[1]))), col)
-            titles.insert(titles.index((col[0], col[1]))+1, (col[0], col[1]))
-    df = df.reindex(columns=columns)
-    
     return df
 
 def get_unique_values(df, column):
@@ -275,13 +305,4 @@ def get_unique_values(df, column):
         return [val for val in df[column].dropna().unique().tolist() if val != ""]
     return []
 
-def simpleColumnsNamesToCompleteColumnsNames(cols, df):
-    if isinstance(cols, list):
-        complete_cols = []
-        for dfcol in df.columns:
-            if dfcol[2] in cols:
-                complete_cols.append(dfcol)
-        return complete_cols
-    elif isinstance(cols, str):
-        matches = [col for col in df.columns if col[2] == cols]
-        return matches[0] if matches else None
+

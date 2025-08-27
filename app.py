@@ -20,6 +20,13 @@ cache = {}
 with open("cache.json", "r", encoding='utf-8') as fp:
     cache = json.load(fp)
 
+#helper functions
+def uploadDetailColumns(newDetailColumns):
+    cache["Affichage"][current_df_name]["Colonnes en détails"] = newDetailColumns
+    with open("cache.json", "w", encoding='utf-8') as fp:
+        json.dump(cache, fp, ensure_ascii=False)
+    return '', 204
+
 
 @app.route('/')
 def index():
@@ -125,7 +132,6 @@ def render(db):
     global current_df_name
     global current_filter
     
-    
 
     if db == 'pas de base de données spécifiée':
         return "No database specified. Please select a database from the menu.", 400
@@ -141,10 +147,19 @@ def render(db):
         current_df_name = db
         if cache["Affichage"].get(current_df_name) is None: #Affichage refers to the display settings for the current database, ie which columns are shown and which are "en détails"
             cache["Affichage"][current_df_name] = {"Colonnes en détails": []}
-    columns = gestionDB.get_column_names(current_df, full=False)
-    form = AddRowForm()
-    ColNotToShow = cache["Affichage"][current_df_name]["Colonnes en détails"] if current_df_name in cache["Affichage"] else []
-    all_columns_names = gestionDB.get_column_names(current_df, full = True)
+    
+    new_cols = []
+    i=1
+    for col in current_df.columns:
+        if col[0] == "":
+            new_cols.append(("Champ seul n°"+ str(i), col[1], col[2]))
+            i += 1
+        else:
+            new_cols.append(col)
+    current_df.columns = pd.MultiIndex.from_tuples(new_cols)
+
+    current_df = gestionDB.orderColumns(current_df)
+
     attached_labels = [] # crawling all labels to see which ones are attached to the current dataframe
     for key, label in cache["Etiquettes"]["liste des étiquettes"]["classifiées"].items():
         for item in label["attachedDataframes"]:
@@ -153,40 +168,48 @@ def render(db):
     
     if ("","", "Etiquettes") not in current_df.columns: #if labels columns does not exist yet, create it
         current_df[("","", "Etiquettes")] = ""
-
-    ColToShow = [col for col in columns if ((col not in ColNotToShow) and (col != "Etiquettes"))]
-    ColToShow = gestionDB.simpleColumnsNamesToCompleteColumnsNames(ColToShow, current_df)
     
+
+    ColNotToShow = gestionDB.listsListToTuplesLit(cache["Affichage"][current_df_name]["Colonnes en détails"]) if current_df_name in cache["Affichage"] else []
+    columns = gestionDB.multiIndexToTuplesList(current_df.columns)
+    columns = [col for col in columns if col != ("", "", "Etiquettes")]
+
+
+
+
+
+    ColToShow = [col for col in columns if ((col not in ColNotToShow))]
     filter_data = {}
     for col in ColToShow:
         countUnique = current_df[col][current_df[col] != ""].nunique(dropna=True)
         count = len(current_df[col][current_df[col] != ""].dropna())
         if countUnique < count and any(val != "" for val in current_df[col]) and countUnique > 1:
-            filter_data[col[2]] = gestionDB.get_unique_values(current_df, col)
+            filter_data[gestionDB.colTupleToString(col)] = gestionDB.get_unique_values(current_df, col)
             if current_df[col].isna().any() or (current_df[col] == "").any():
-                filter_data[col[2]].append("non rempli")
+                filter_data[gestionDB.colTupleToString(col)].append("non rempli") #mandatory use of a stringified key because tuples can't be used as keys outside python
     
-    return render_template('gestionDB.html', df=gestionDB.df_to_html(current_df, ColNotToShow, current_filter), columns=columns, form=form, full_columns=all_columns_names, attachedLabels=attached_labels, filter_data=filter_data, current_filter = current_filter)
+    current_filter_html = {}
+    if current_filter is not None:
+        # Convert all keys in current_filter from string to tuple using colStringToTuple
+        current_filter_html = {gestionDB.colTupleToString(k): v for k, v in current_filter.items()}
+
+
+    df = gestionDB.df_to_html(current_df, ColNotToShow, current_filter)
+
+    return render_template('gestionDB.html', df=df, columnsHTML=columns, attached_labels=attached_labels, filter_data=filter_data, current_filter = current_filter_html)
 
 
 # Functions used in gestionDB.html
-class AddRowForm(FlaskForm):
-    global current_df
-    db = StringField('db')
-    for col in gestionDB.get_column_names(current_df):
-        col = StringField(col)
 
 @app.route('/appendRow', methods=['POST'])
 def appendRow():
     global current_df
     df = current_df
-    form = AddRowForm()
-    if form.validate_on_submit():
-        new_row = [request.form.get(col) for col in gestionDB.get_column_names(df)]
-        df = gestionDB.append_row(df, new_row)
-        current_df = df
-        return redirect(url_for('auto_render'))
-    return redirect(url_for('auto_render'))
+    data = request.get_json()
+    newRow = {gestionDB.colStringToTuple(k): v for k, v in data.items()}
+    df = gestionDB.append_row(df, newRow)
+    current_df = df
+    return '', 204
 
 @app.route('/deleteRow', methods=['POST'])
 def deleteRow():
@@ -197,9 +220,7 @@ def deleteRow():
     if rowID is not None:
         df = df.drop(index=int(rowID), errors='ignore')
         current_df = df
-        columns = gestionDB.get_column_names(df)
         return '', 200
-    columns = gestionDB.get_column_names(df)
     return '', 200
 
 # the columns which are not shown, the data is available when the "détails" button is clicked
@@ -207,11 +228,19 @@ def deleteRow():
 def rowDetails(rowID):
     global current_df
     df = current_df
-    return gestionDB.row_columns_to_dict(df, rowID, cache["Affichage"][current_df_name]["Colonnes en détails"])
+    return gestionDB.row_columns_to_dict(df, rowID, gestionDB.colStringToTuple(cache["Affichage"][current_df_name]["Colonnes en détails"]))
 
 @app.route('/getAffichageData')
 def getAffichageData():
-    res = {"Colonnes en détails": cache["Affichage"][current_df_name]["Colonnes en détails"], "Toutes les colonnes": gestionDB.get_column_names(current_df)}
+    colonnes_details = cache["Affichage"][current_df_name]["Colonnes en détails"]
+    toutes_colonnes = gestionDB.multiIndexToTuplesList(current_df.columns)
+    # Remove ('', '', "Etiquettes") from toutes_colonnes if present
+    toutes_colonnes = [col for col in toutes_colonnes if col != ("", "", "Etiquettes")]
+    # Convert list of tuples to list of lists
+    res = {
+        "Colonnes en détails": gestionDB.tuplesListToListsList(colonnes_details),
+        "Toutes les colonnes": gestionDB.tuplesListToListsList(toutes_colonnes)
+    }
     return json.dumps(res), 200, {'Content-Type': 'application/json'}
 
 @app.route('/setdetailcontent', methods=['POST'])
@@ -219,17 +248,15 @@ def setDetailContent():
     global cache
     data = request.get_json()
     if data is not None:
-        cache["Affichage"][current_df_name]["Colonnes en détails"] = data.get('Colonne en détails')
-        with open("cache.json", "w", encoding='utf-8') as fp:
-            json.dump(cache, fp, ensure_ascii=False)
-        return '', 204
+        return uploadDetailColumns(data.get('Colonne en détails'))
+        
     return '', 404
 
 @app.route('/deleteColumn', methods=['POST'])
 def deleteColumn():
     global current_df
     df = current_df
-    colName = request.get_json().get('column_name')
+    colName = gestionDB.colStringToTuple(request.get_json().get('column_name'))
     current_df = gestionDB.delete_column(df, colName)
     return '', 204
 
@@ -293,8 +320,13 @@ def getLabelsForRow(rowID):
 def applyFilters():
     global current_filter
     current_filter = request.get_json()
+    if current_filter is not None:
+        # Convert all keys in current_filter from string to tuple using colStringToTuple
+        current_filter = {gestionDB.colStringToTuple(k): v for k, v in current_filter.items()}
 
-    if current_filter.get("Etiquettes"):
+
+
+    if current_filter.get(('','', "Etiquettes")):
         # Get all selected labels and their children recursively
         def get_all_labels_with_children(selected_labels, classified_labels):
             result = set()
@@ -307,10 +339,10 @@ def applyFilters():
             for label in selected_labels:
                 add_label_and_children(label)
             return list(result)
-        
-        selected_labels = current_filter["Etiquettes"]
+
+        selected_labels = current_filter[('', '', "Etiquettes")]
         classified_labels = cache["Etiquettes"]["liste des étiquettes"]["classifiées"]
-        current_filter["Etiquettes"] = get_all_labels_with_children(selected_labels, classified_labels)
+        current_filter[('', '', "Etiquettes")] = get_all_labels_with_children(selected_labels, classified_labels)
     return '', 204
 
 
@@ -320,11 +352,10 @@ def exportData():
     df = current_df
     format = request.get_json().get('format')
     cols = request.get_json().get('columns', [])
+    cols = gestionDB.listsListToTuplesLit(cols)
     df_filtered = gestionDB.filter_df(df, current_filter=current_filter)
-    df_filtered = df_filtered[gestionDB.simpleColumnsNamesToCompleteColumnsNames(cols, df_filtered)]
+    df_filtered = df_filtered[cols]
     
-    # Only keep third layer headers (level 2 in zero-based indexing)
-    df_filtered.columns = [col[-1] for col in df_filtered.columns]
     # Remove leading and trailing rows where all columns are empty
     def is_row_empty(row):
         return all((pd.isna(x) or str(x).strip() == "") for x in row)
@@ -364,16 +395,17 @@ def updateCell():
 
     data = request.get_json()
     row = data.get('row')
-    col = data.get('col')
+    col = tuple(data.get('col'))
     value = data.get('value')
 
-    current_df[gestionDB.simpleColumnsNamesToCompleteColumnsNames(col, current_df)].iloc[int(row)] = value
+    current_df[col].iloc[int(row)] = value
 
     return '', 204
 
 @app.route('/updateHeaderNames', methods=['POST'])
 def updateHeaderNames():
     global current_df
+    ColNotToShow = gestionDB.listsListToTuplesLit(cache["Affichage"][current_df_name]["Colonnes en détails"]) if current_df_name in cache["Affichage"] else []
 
     data = request.get_json()
     headerID = data.get('headerID')
@@ -385,8 +417,11 @@ def updateHeaderNames():
             # Replace the last element in headerID with newName, keep the rest of the tuple
             new_col = tuple(list(col[:len(headerID)-1]) + [newName] + list(col[len(headerID):]))
             new_columns.append(new_col)
+            if col in ColNotToShow:
+                ColNotToShow = [new_col if c == col else c for c in ColNotToShow] #keeps order in ColNotToShow
         else:
             new_columns.append(col)
+    uploadDetailColumns(ColNotToShow)
     current_df.columns = pd.MultiIndex.from_tuples(new_columns)        
 
     return '', 204

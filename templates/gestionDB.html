@@ -14,9 +14,9 @@
         <script>
             // Example data structure: replace with backend data as needed
             const filterData = {{ filter_data|tojson|safe }}; // {col1: [label1, label2], col2: [label3, ...], ...}
-            const shownColumns = {{ columns|tojson|safe }}; // List of shown column names
             const currentFilter = {{ current_filter|tojson|safe }}; // Current filter applied
-            const attachedLabels = {{ attachedLabels|tojson|safe }}; // List of labels attached to the row
+            const attachedLabels = {{ attached_labels|tojson|safe }}; // List of labels attached to the row
+            const columns = {{ columnsHTML|tojson|safe }};
         </script>
     </head>
 
@@ -110,21 +110,15 @@
             <form id="addColumnForm" method="POST" action="/addColumn" style="margin-left: 32px; display: flex; flex-direction: column; background: grey; padding: 16px; border-radius: 8px; min-width: 220px;">
                 <input type="text" name="column_name_1" placeholder="Titre 1" list = "titres1" style="margin-bottom: 8px;">
                 <datalist id="titres1">
-                    {% for col in full_columns[0] %}
-                        <option>{{col}}</option>
-                    {% endfor %}
+                    <!-- JS injects options here -->
                 </datalist>
                 <input type="text" name="column_name_2" placeholder="Titre 2" list = "titres2" style="margin-bottom: 8px;">
                 <datalist id="titres2">
-                    {% for col in full_columns[1] %}
-                        <option>{{col}}</option>
-                    {% endfor %}
+                    <!-- JS injects options here -->
                 </datalist>
                 <input type="text" name="column_name_3" placeholder="Titre 3" list = "titres3" required style="margin-bottom: 8px;">
                 <datalist id="titres3">
-                    {% for col in full_columns[2] %}
-                        <option>{{col}}</option>
-                    {% endfor %}
+                    <!-- JS injects options here -->
                 </datalist>
 
                 <button class="btn btn-success" type="submit">
@@ -134,24 +128,22 @@
         </div>
         
 
-        <form action="{{ url_for('appendRow') }}" method="post">
-            {{ form.csrf_token }}
-            {{ form.hidden_tag() }}
-            <input type="hidden" name="db" value="politiques">
-            <table style="margin-left:auto; margin-right:auto;">
-            <tr>
-            {% for col in columns %}
-            <td>
-                <input type="text" name="{{ col }}" placeholder="{{ col }}">
-            </td>
-            {% endfor %}
-            <td>
-                <button type="submit">Ajouter</button>
-            </td>
-            </tr>
-            </table>
-        </form>
-        </form>
+
+        <div style="width: 100%; margin-bottom: 24px; overflow-x: auto; min-width: 400px;">
+            <form id="addRowForm" style="width: max-content; min-width: 100%;">
+                <table style="width: max-content; min-width: 100%;">
+                    <tr id="addRowInputs">
+                        <td id="addRowInputsContainer">
+                            <!-- JS injects input fields here -->
+                        </td>
+                        <td>
+                            <button type="button" onclick="submitAddRow()">Ajouter</button>
+                        </td>
+                    </tr>
+                </table>
+            </form>
+        </div>
+        
 
 
         <div style="display: flex; justify-content: center; align-items: center; min-height: 60vh;"></div>
