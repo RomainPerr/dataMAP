@@ -1,0 +1,22 @@
+{
+    "Paramètres": {
+        "URL du client NextCloud": "",
+        "Dossier de fonctionnement": "",
+        "Dossier de téléversement des bases de données": "",
+        "URL des fichiers de la base de données": {}
+    },
+    "Gestion de NextCloud": {
+        "Correspondance URL des DB": {}
+    },
+    "Affichage": {},
+    "Etiquettes": {
+        "racines": {
+            "racine_non_classifiées": [],
+            "racine_classifiées": []
+        },
+        "liste des étiquettes": {
+            "non_classifiées": {},
+            "classifiées": {}
+        }
+    }
+}

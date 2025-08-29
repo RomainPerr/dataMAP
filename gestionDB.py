@@ -23,7 +23,11 @@ def colStringToTuple(colString):
     if isinstance(colString, str):
         return tuple(colString.split("||"))
     elif isinstance(colString, list):
-        return [tuple(item.split("||")) for item in colString]
+        # Check if it's a list of strings or a list of lists
+        if all(isinstance(item, str) for item in colString):
+            return [tuple(item.split("||")) for item in colString]
+        elif all(isinstance(item, list) for item in colString):
+            return [tuple(item) for item in colString]
     return colString
 
 def multiIndexToTuplesList(multiIndex):
@@ -43,6 +47,15 @@ def tuplesListToListsList(tuples):
 
 
 def orderColumns(df):
+    # Check for duplicate columns in MultiIndex or Index
+    seen = set()
+    duplicates = set()
+    for col in df.columns:
+        if col in seen:
+            duplicates.add(col)
+        else:
+            seen.add(col)
+
     # Order columns by first element, then by second element within each group, preserving original order otherwise
     cols = list(df.columns)
     if not cols:
@@ -80,6 +93,10 @@ def read_df(file_path, name, pwd, label_rows_number=3):
     df = pd.read_excel(BytesIO(r.content), engine='calamine',
                         header=[i for i in range(label_rows_number)],
                         index_col=0)
+    
+    # Remove '.0' at the end of any string value in the DataFrame
+    df = df.applymap(lambda x: str(x)[:-2] if isinstance(x, float) and str(x).endswith('.0') else x)
+
     # Convert all column names to string
     df.columns = pd.MultiIndex.from_tuples(
         [tuple(str(item) for item in col) for col in df.columns])
@@ -91,6 +108,23 @@ def read_df(file_path, name, pwd, label_rows_number=3):
                 new_col[i] = ""
         new_columns.append(tuple(new_col))
     df.columns = pd.MultiIndex.from_tuples(new_columns)
+
+    # Convert DataFrame to HTML, preserving \n and \r as <br> for display --> induces problem because ugly version remains at some places, maybe place it before
+    def replace_newlines(val):
+        if isinstance(val, str):
+            return val.replace('\r\n', '<br>').replace('\r', '<br>').replace('\n', '<br>')
+        return val
+
+    # Replace newlines in data
+    df = df.map(replace_newlines)
+
+    # Replace newlines in column headers (MultiIndex or Index)
+    if isinstance(df.columns, pd.MultiIndex):
+        df.columns = pd.MultiIndex.from_tuples(
+            [tuple(replace_newlines(level) for level in col) for col in df.columns]
+        )
+    else:
+        df.columns = [replace_newlines(col) for col in df.columns]
 
     return df
 
@@ -113,11 +147,11 @@ def filter_df(df, current_filter):
             if "non rempli" in values:
                 values += ['']
             if key == "Etiquettes":
-                df = df[df[("","", "Etiquettes")].apply(lambda etiquettes: any(e in values for e in etiquettes if isinstance(etiquettes, list)))]
+                df = df[df[("Etiquettes","Etiquettes", "Etiquettes")].apply(lambda etiquettes: any(e in values for e in etiquettes if isinstance(etiquettes, list)))]
             else:
                 df = df[df[key].isin(values)]
 
-    df = df.drop(columns=[("","", "Etiquettes")], errors='ignore')
+    df = df.drop(columns=[("Etiquettes","Etiquettes", "Etiquettes")], errors='ignore')
     return df
 
 # Function to convert DataFrame to HTML shown in gestionDB.html
@@ -136,7 +170,7 @@ def df_to_html(df, ColNotToShow, current_filter):
     if isinstance(df_toshow.columns, pd.MultiIndex):
         for col in df_toshow.columns:
             if col[0] not in future_first_level_ids:
-                future_first_level_ids.append(col[0])
+                future_first_level_ids.append((col[0]))
             # For 2nd level: add first level header if not already present
             if (col[0], col[1]) not in future_second_level_ids:
                 future_second_level_ids.append((col[0], col[1]))
@@ -144,7 +178,9 @@ def df_to_html(df, ColNotToShow, current_filter):
             if (col[0], col[1], col[2]) not in future_third_level_ids:
                 future_third_level_ids.append((col[0], col[1], col[2]))
 
-    df_toshow = df_toshow.to_html(classes='table table-striped', index=False)
+    
+
+    df_toshow = df_toshow.to_html(classes='table table-striped', index=False, escape=False)
 
     soup = BeautifulSoup(df_toshow, "html.parser")
     table = soup.find("table")
@@ -162,7 +198,7 @@ def df_to_html(df, ColNotToShow, current_filter):
             # First header row: assign id from future_first_level_ids
             for idx, th in enumerate(first_header.find_all("th")):
                 if idx < len(future_first_level_ids):
-                    th['data-id'] = json.dumps(future_first_level_ids[idx])
+                    th['data-id'] = json.dumps([future_first_level_ids[idx]]) # forced to add brackets to get a list and not a simple string
 
             # Second header row: assign id from future_second_level_ids
             for idx, th in enumerate(second_header.find_all("th")):
@@ -193,7 +229,7 @@ def df_to_html(df, ColNotToShow, current_filter):
                         **{
                             "class": "btn btn-danger btn-sm ms-2",
                             "type": "button",
-                            "onclick": f"deleteColumn('{col_name}')"
+                            "onclick": f"deleteColumn({json.dumps(col_name)})"
                         }
                     )
                     btn.string = "Supprimer"
@@ -269,23 +305,21 @@ def get_column_names(df, full=True): # the full argument doesn't make sense anym
         return []
 
 def row_columns_to_dict(df, rowID, columns): #convert to dictionnary for the "détails" modal to show
-    print(columns)
     if df is not None:
-        row = df.iloc[int(rowID)]
-        if row is not None:
-            details = {}
-            for col in columns:
-                value = row[col]
-                # Convert pandas Timestamp to string
-                if hasattr(value, 'isoformat'):
-                    value = value.isoformat()
-                # Replace NaN with None (will be serialized as null in JSON)
-                if pd.isna(value):
-                    value = "Non renseigné"
-                details[col] = value
+        idx = df.index[int(rowID)]
+        details = {}
+        for col in columns:
+            value = df.at[idx, col]
+            # Convert pandas Timestamp to string
+            if hasattr(value, 'isoformat'):
+                value = value.isoformat()
+            # Replace NaN with None (will be serialized as null in JSON)
+            if pd.isna(value):
+                value = "Non renseigné"
+            details[col] = value
 
-            return json.dumps(details), 200, {'Content-Type': 'application/json'}
-    return "Error fetching row details.", 500
+        return details
+    return {}
 
 def delete_column(df, column_name):
     if df is not None:
@@ -306,3 +340,14 @@ def get_unique_values(df, column):
     return []
 
 
+def df_to_xlsx(df, filename):
+    if df is not None:
+        output = BytesIO()
+        # If DataFrame has MultiIndex columns, write with headers
+        if isinstance(df.columns, pd.MultiIndex):
+            df.to_excel(output, index=True)
+        else:
+            df.to_excel(output, index=False)
+        output.seek(0)
+        return output
+    

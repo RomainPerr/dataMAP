@@ -71,6 +71,8 @@
     </ul>
 
     <a href="{{ url_for('index') }}"><button type = "button">Retour à l'accueil</button></a>
+    <button type = "button" onclick="saveCacheToNextcloud()">Sauvegarder le cache sur le serveur</button>
+    <button type = "button" onclick="getCacheFromNextCloud()">Charger le cache depuis le serveur</button>
 
         <script>
         function toggleOptions(category, key) {
@@ -122,12 +124,61 @@
                     alert('Erreur lors de la modification.');
                 }
             });
-            alert('Nouveau: ' + newValue + ' pour ' + key);
             cancelEdit(category, key);
         }
 
         function cancelEdit(category, key) {
             document.getElementById('edit-' + category + '-' + key).style.display = 'none';
+        }
+
+        function saveCacheToNextcloud() {
+            fetch('{{ url_for("saveCacheToNextcloud") }}', {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                }
+            })
+            .then(response => {
+                if (response.ok) {
+                    alert('Cache synchronisé avec succès.');
+                } else {
+                    response.json().then(data => {
+                        alert(data.error || 'Erreur inconnue.');
+                    }).catch(() => {
+                        alert('Erreur lors de la synchronisation du cache.');
+                    });
+                }
+            })
+            .catch(error => {
+                alert('Erreur de connexion lors de la synchronisation du cache');
+            });
+        }
+
+        function getCacheFromNextCloud() {
+            if (confirm('Êtes-vous sûr de vouloir charger le cache depuis le serveur ? Cela écrasera les paramètres locaux.')) {
+                fetch('{{ url_for("getCacheFromNextCloud") }}', {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': '{{ csrf_token }}'
+                    }
+                })
+                .then(response => {
+                    if (response.ok) {
+                        location.reload();
+                    } else {
+                        response.json().then(data => {
+                            alert(data.error || 'Erreur inconnue.');
+                        }).catch(() => {
+                            alert('Erreur lors du chargement du cache.');
+                        });
+                    }
+                })
+                .catch(error => {
+                    alert('Erreur de connexion lors du chargement du cache');
+                });
+            }
         }
     </script>
 

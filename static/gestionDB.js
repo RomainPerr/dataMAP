@@ -21,6 +21,7 @@ function deleteRow(rowID) {
 }
 
 function deleteColumn(colName) {
+    alert("Suppression de la colonne : " + colName);
     fetch('/deleteColumn', {
         method: 'POST',
         headers: {
@@ -169,11 +170,15 @@ function openAffichageModal() { // management of "détails" columns
         .then(data => {
             let detailCols = data["Colonnes en détails"];
             const allCols = data["Toutes les colonnes"];
+            
             let otherCols = allCols.filter(
                 col => !detailCols.some(
                     dcol => Array.isArray(dcol) && Array.isArray(col) && dcol.length === col.length && dcol.every((v, i) => v === col[i])
                 )
             );
+            
+            console.log(detailCols);
+            console.log(otherCols);
 
             // Sort detailCols and otherCols according to the order in columns
             function sortByColumnsOrder(cols) {
@@ -196,8 +201,6 @@ function openAffichageModal() { // management of "détails" columns
                 });
             }
             detailCols = sortByColumnsOrder(detailCols);
-            console.log(columns);
-            console.log(detailCols);
             otherCols = sortByColumnsOrder(otherCols);
 
             const detailList = document.getElementById('detailCols');
@@ -359,6 +362,20 @@ function showDetails(rowID) {
             let details;
             try {
                 details = JSON.parse(text);
+                if (details && typeof details === 'object') {
+                    // Try to beautify column names if possible
+                    let keys = Object.keys(details);
+                    let beautifiedKeys = keys;
+                    beautifiedKeys = beautifyColumnNames(keys);
+                    let html = '<ul>';
+                    keys.forEach((key, idx) => {
+                        html += `<li><strong>${beautifiedKeys[idx]}:</strong> ${details[key]}</li>`;
+                    });
+                    html += '</ul>';
+                    content.innerHTML = html;
+                    content.appendChild(closeBtn);
+                    return;
+                }
             } catch {
                 details = null;
             }
@@ -563,7 +580,7 @@ function filterLabels(col, search, isInitialRender = false) {
     const labelsDiv = document.getElementById('labels_' + col);
     // Get the text content of all label elements inside labelsDiv
     let labels = [];
-    if (col != "||||Etiquettes") {
+    if (col != "Etiquettes") {
         labels = filterData[col] || [];
     }else{
         labels = attachedLabels;
@@ -1062,4 +1079,38 @@ document.addEventListener('DOMContentLoaded', function() {
             finishEdit(true);
         });
     });
+});
+
+// SAVE DATABASE
+
+document.addEventListener('DOMContentLoaded', function() {
+    const saveBtn = document.getElementById('saveDBBtn');
+    if (saveBtn) {
+        saveBtn.addEventListener('click', function() {
+            fetch('/saveDatabase', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => {
+                if (!response.ok) {
+                    alert('Erreur lors de la sauvegarde de la base de données.');
+                }else{
+                    alert('Base de données sauvegardée avec succès.');
+                }
+            })
+            .catch(() => {
+                alert('Erreur lors de la sauvegarde de la base de données.');
+            });
+        });
+    }
+});
+
+// Keyboard shortcut: Ctrl+S
+document.addEventListener('keydown', function(e) {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        document.getElementById('saveDBBtn').click();
+    }
 });

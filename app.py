@@ -9,6 +9,9 @@ import json
 from flask_wtf.csrf import generate_csrf
 from io import BytesIO
 import pandas as pd
+import nextcloud_client
+import tempfile
+import os
 
 import gestionDB # functions related to the data display and data management
 
@@ -17,15 +20,47 @@ app = Flask(__name__)
 app.config.from_pyfile('settings.py')
 
 cache = {}
-with open("cache.json", "r", encoding='utf-8') as fp:
-    cache = json.load(fp)
+
+
 
 #helper functions
-def uploadDetailColumns(newDetailColumns):
-    cache["Affichage"][current_df_name]["Colonnes en détails"] = newDetailColumns
+
+def uploadCache():
+    global cache    
+
     with open("cache.json", "w", encoding='utf-8') as fp:
         json.dump(cache, fp, ensure_ascii=False)
     return '', 204
+
+
+def reinitCache():
+    with open("cache_reinit.json", "r", encoding='utf-8') as fp:
+        try:
+            global cache
+            cache = json.load(fp)
+            uploadCache()
+        except json.JSONDecodeError:
+            cache = {}
+    return '', 204
+
+def downloadCache():
+    global cache
+
+    if not os.path.exists("cache.json") or os.path.getsize("cache.json") == 0:
+        reinitCache()
+        return '', 204
+    
+    with open("cache.json", "r", encoding='utf-8') as fp:
+        try:
+            cache = json.load(fp)
+        except json.JSONDecodeError:
+            reinitCache()
+    return '', 204
+
+downloadCache()
+
+
+
 
 
 @app.route('/')
@@ -71,8 +106,7 @@ def addEntry():
         value = form.value.data
         if key and value:
             cache["Paramètres"][category][key] = value
-            with open("cache.json", "w", encoding='utf-8') as fp:
-                json.dump(cache, fp, ensure_ascii=False)
+            uploadCache()
     return redirect(url_for('settings'))
 
 @app.route('/deleteEntry', methods=['POST'])
@@ -83,13 +117,11 @@ def deleteEntry():
     if category in cache["Paramètres"].keys() :
         if isinstance(cache["Paramètres"].get(category), dict) and key in cache["Paramètres"][category]:
             del cache["Paramètres"][category][key]
-            with open("cache.json", "w", encoding='utf-8') as fp:
-                json.dump(cache, fp, ensure_ascii=False)
+            uploadCache()
             return '', 204
         else :
             del cache["Paramètres"][key]
-            with open("cache.json", "w", encoding='utf-8') as fp:
-                json.dump(cache, fp, ensure_ascii=False)
+            uploadCache()
             return '', 204
     return '', 404
 
@@ -102,13 +134,11 @@ def editEntry():
     if category in cache["Paramètres"].keys():
         if isinstance(cache["Paramètres"].get(category), dict) and key in cache["Paramètres"][category]:
             cache["Paramètres"][category][key] = value
-            with open("cache.json", "w", encoding='utf-8') as fp:
-                json.dump(cache, fp, ensure_ascii=False)
+            uploadCache()
             return '', 204
         else :
             cache["Paramètres"][key] = value
-            with open("cache.json", "w", encoding='utf-8') as fp:
-                json.dump(cache, fp, ensure_ascii=False)
+            uploadCache()
             return '', 204
     return '', 404
 
@@ -122,9 +152,21 @@ current_df = None
 current_df_name = None
 current_filter = None
 
+
 @app.route('/gestionDB') #auto-reload without specifying database, it will use the current_df_name
 def auto_render():
     return redirect(url_for('render', db=current_df_name if current_df_name else 'pas de base de données spécifiée'))
+
+@app.route('/reinitialize-db-cache', methods=['GET'])
+def reinitialize_db_cache():
+    global current_df_name
+    URL = cache["Paramètres"]['URL des fichiers de la base de données'][current_df_name]
+    if URL in cache["Gestion de NextCloud"]["Correspondance URL des DB"]:
+        del cache["Gestion de NextCloud"]["Correspondance URL des DB"][URL]
+        df_to_reload_name = current_df_name
+        current_df_name = None
+        uploadCache()
+    return jsonify({"df_to_reload": df_to_reload_name}), 200
 
 @app.route('/gestionDB/<db>')
 def render(db):
@@ -135,23 +177,42 @@ def render(db):
 
     if db == 'pas de base de données spécifiée':
         return "No database specified. Please select a database from the menu.", 400
-
+    
+    
     if db != current_df_name:
-        df = gestionDB.read_df(cache["Paramètres"]['URL des fichiers de la base de données'][db], 
-                                            request.cookies.get('name'), 
-                                            request.cookies.get('pwd'))
+        current_df_name = db
+        URL = cache["Paramètres"]['URL des fichiers de la base de données'][db]
+        if cache["Gestion de NextCloud"]["Correspondance URL des DB"].get(URL):
+            # Test if the link in cache["Gestion de NextCloud"]["Correspondance URL des DB"][URL] is working
+            test_url = cache["Gestion de NextCloud"]["Correspondance URL des DB"][URL]
+            while True:
+                try:
+                    response = req.get(test_url, timeout=5)
+                    if response.status_code == 200:
+                        break
+                    else:
+                        # Instead of print, flash a message to the user and redirect to an error page
+                        return redirect(url_for('db_loading_error'))
+                except Exception as e:
+                    return redirect(url_for('db_loading_error'))
+            
+            URL = cache["Gestion de NextCloud"]["Correspondance URL des DB"][URL]
+        URL += "/download"
+
+        df = gestionDB.read_df(URL, request.cookies.get('name'), request.cookies.get('pwd'))
+        
         if df is None:
             return "Error fetching the database file. Please check your credentials or the URL.", 500
         current_df = df
         current_df.reset_index(drop=True, inplace=True)
-        current_df_name = db
+
         if cache["Affichage"].get(current_df_name) is None: #Affichage refers to the display settings for the current database, ie which columns are shown and which are "en détails"
             cache["Affichage"][current_df_name] = {"Colonnes en détails": []}
     
     new_cols = []
     i=1
     for col in current_df.columns:
-        if col[0] == "":
+        if col[0] == "" and col != ("Etiquettes", "Etiquettes", "Etiquettes"):
             new_cols.append(("Champ seul n°"+ str(i), col[1], col[2]))
             i += 1
         else:
@@ -165,14 +226,14 @@ def render(db):
         for item in label["attachedDataframes"]:
             if item == current_df_name:
                 attached_labels.append(key)
-    
-    if ("","", "Etiquettes") not in current_df.columns: #if labels columns does not exist yet, create it
-        current_df[("","", "Etiquettes")] = ""
-    
+        
+    if ("Etiquettes","Etiquettes", "Etiquettes") not in current_df.columns: #if labels columns does not exist yet, create it
+        current_df[("Etiquettes","Etiquettes", "Etiquettes")] = ""
+
 
     ColNotToShow = gestionDB.listsListToTuplesLit(cache["Affichage"][current_df_name]["Colonnes en détails"]) if current_df_name in cache["Affichage"] else []
     columns = gestionDB.multiIndexToTuplesList(current_df.columns)
-    columns = [col for col in columns if col != ("", "", "Etiquettes")]
+    columns = [col for col in columns if col != ("Etiquettes", "Etiquettes", "Etiquettes")]
 
 
 
@@ -190,7 +251,6 @@ def render(db):
     
     current_filter_html = {}
     if current_filter is not None:
-        # Convert all keys in current_filter from string to tuple using colStringToTuple
         current_filter_html = {gestionDB.colTupleToString(k): v for k, v in current_filter.items()}
 
 
@@ -198,6 +258,10 @@ def render(db):
 
     return render_template('gestionDB.html', df=df, columnsHTML=columns, attached_labels=attached_labels, filter_data=filter_data, current_filter = current_filter_html)
 
+
+@app.route('/db_loading-error')
+def db_loading_error():
+    return render_template('error.html', message="La base de données que vous tentez d'ouvrir a déjà été manipulée par dataMAP, mais nous avons rencontré un problème lors du chargement du fichier modifié. Voulez-vous réinitialiser le travail sur cette base de données ? Les éventuelles modifications précédentes risquent d'être perdues.")
 
 # Functions used in gestionDB.html
 
@@ -228,14 +292,17 @@ def deleteRow():
 def rowDetails(rowID):
     global current_df
     df = current_df
-    return gestionDB.row_columns_to_dict(df, rowID, gestionDB.colStringToTuple(cache["Affichage"][current_df_name]["Colonnes en détails"]))
+    detailInfo = gestionDB.colStringToTuple(cache["Affichage"][current_df_name]["Colonnes en détails"])
+    detailInfo = gestionDB.row_columns_to_dict(df, rowID, detailInfo)
+    detailInfo = {gestionDB.colTupleToString(k): v for k, v in detailInfo.items()}
+    return jsonify(detailInfo) 
 
 @app.route('/getAffichageData')
 def getAffichageData():
     colonnes_details = cache["Affichage"][current_df_name]["Colonnes en détails"]
     toutes_colonnes = gestionDB.multiIndexToTuplesList(current_df.columns)
-    # Remove ('', '', "Etiquettes") from toutes_colonnes if present
-    toutes_colonnes = [col for col in toutes_colonnes if col != ("", "", "Etiquettes")]
+    # Remove ('Etiquettes', 'Etiquettes', "Etiquettes") from toutes_colonnes if present
+    toutes_colonnes = [col for col in toutes_colonnes if col != ("Etiquettes", "Etiquettes", "Etiquettes")]
     # Convert list of tuples to list of lists
     res = {
         "Colonnes en détails": gestionDB.tuplesListToListsList(colonnes_details),
@@ -248,15 +315,17 @@ def setDetailContent():
     global cache
     data = request.get_json()
     if data is not None:
-        return uploadDetailColumns(data.get('Colonne en détails'))
-        
+        cache["Affichage"][current_df_name]["Colonnes en détails"] = data.get('Colonne en détails')
+        uploadCache()
+        return '', 204
+
     return '', 404
 
 @app.route('/deleteColumn', methods=['POST'])
 def deleteColumn():
     global current_df
     df = current_df
-    colName = gestionDB.colStringToTuple(request.get_json().get('column_name'))
+    colName = tuple(request.get_json().get('column_name'))
     current_df = gestionDB.delete_column(df, colName)
     return '', 204
 
@@ -282,9 +351,7 @@ def save_labels():
     data = request.get_json()
     if data is not None:
         cache["Etiquettes"] = data
-        with open("cache.json", "w", encoding='utf-8') as fp:
-            json.dump(cache, fp, ensure_ascii=False)
-        return '', 204
+        uploadCache()
     return '', 404
 
 @app.route('/save-label-attribution', methods=['POST'])
@@ -293,8 +360,7 @@ def save_label_attribution():
     data = request.get_json()
     if data is not None:
         cache["Etiquettes"]["attribution des étiquettes"] = data
-        with open("cache.json", "w", encoding='utf-8') as fp:
-            json.dump(cache, fp, ensure_ascii=False)
+        uploadCache()
         return '', 204
     return '', 404
 
@@ -306,14 +372,14 @@ def saveLabelAttribution():
     rowID = data.get("rowID")
     labels = data.get("labels", [])
     if data is not None:
-        current_df.at[int(rowID), ("", "", "Etiquettes")] = labels
+        current_df.at[int(rowID), ("Etiquettes", "Etiquettes", "Etiquettes")] = labels
     return '', 204
 
 @app.route('/getLabelsForRow/<rowID>')
 def getLabelsForRow(rowID):
     global current_df
     df = current_df
-    labels = df[("","", "Etiquettes")].iloc[int(rowID)]
+    labels = df[("Etiquettes", "Etiquettes", "Etiquettes")].iloc[int(rowID)]
     return jsonify({"labels": labels}), 200
 
 @app.route('/applyFilters', methods=['POST'])
@@ -322,11 +388,11 @@ def applyFilters():
     current_filter = request.get_json()
     if current_filter is not None:
         # Convert all keys in current_filter from string to tuple using colStringToTuple
-        current_filter = {gestionDB.colStringToTuple(k): v for k, v in current_filter.items()}
+        current_filter = {gestionDB.colStringToTuple(k) if k != "Etiquettes" else k: v for k, v in current_filter.items()}
 
 
 
-    if current_filter.get(('','', "Etiquettes")):
+    if current_filter.get('Etiquettes'):
         # Get all selected labels and their children recursively
         def get_all_labels_with_children(selected_labels, classified_labels):
             result = set()
@@ -340,9 +406,10 @@ def applyFilters():
                 add_label_and_children(label)
             return list(result)
 
-        selected_labels = current_filter[('', '', "Etiquettes")]
+        selected_labels = current_filter["Etiquettes"]
         classified_labels = cache["Etiquettes"]["liste des étiquettes"]["classifiées"]
-        current_filter[('', '', "Etiquettes")] = get_all_labels_with_children(selected_labels, classified_labels)
+        current_filter["Etiquettes"] = get_all_labels_with_children(selected_labels, classified_labels)
+        
     return '', 204
 
 
@@ -375,7 +442,7 @@ def exportData():
         elif format == 'xlsx':
             output = BytesIO()
             with pd.ExcelWriter(output, engine='openpyxl') as writer:
-                df_filtered.to_excel(writer, index=False, sheet_name='Sheet1')
+                df_filtered.to_excel(writer, index=True, sheet_name='Sheet1')
             output.seek(0)
             response = make_response(output.read())
             response.headers['Content-Disposition'] = 'attachment; filename=data.xlsx'
@@ -410,6 +477,7 @@ def updateHeaderNames():
     data = request.get_json()
     headerID = data.get('headerID')
     newName = data.get('newHeaderValue')
+
     # Replace headers in current_df.columns that start with headerID by newName
     new_columns = []
     for col in current_df.columns:
@@ -421,7 +489,68 @@ def updateHeaderNames():
                 ColNotToShow = [new_col if c == col else c for c in ColNotToShow] #keeps order in ColNotToShow
         else:
             new_columns.append(col)
-    uploadDetailColumns(ColNotToShow)
+
+    cache["Affichage"][current_df_name]["Colonnes en détails"] = ColNotToShow
+    uploadCache()
+
     current_df.columns = pd.MultiIndex.from_tuples(new_columns)        
+
+    return '', 204
+
+@app.route('/saveDatabase', methods=['POST'])
+def saveDatabase():
+    global current_df
+    global current_df_name
+    
+    file_obj = gestionDB.df_to_xlsx(current_df, current_df_name + ".xlsx")
+    file_obj.seek(0)  # Ensure we're at the start of the file
+    nc = nextcloud_client.Client(cache["Paramètres"]["URL du client NextCloud"])
+    nc.login(request.cookies.get('name'), request.cookies.get('pwd'))
+    remote_path = cache["Paramètres"]["Dossier de téléversement des bases de données"]+ "/" + current_df_name + '.xlsx'
+    print(remote_path)
+    # Write BytesIO to a temporary file
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx") as tmp:
+        tmp.write(file_obj.read())
+        tmp_path = tmp.name
+    try:
+        nc.put_file(remote_path, tmp_path)
+        link_info = nc.share_file_with_link(remote_path)
+        
+        URL = cache["Paramètres"]['URL des fichiers de la base de données'][current_df_name]
+        cache["Gestion de NextCloud"]["Correspondance URL des DB"][URL] = link_info.get_link()
+        uploadCache()
+    finally:
+        os.remove(tmp_path)
+    return '', 204
+
+
+@app.route('/saveCacheToNextcloud', methods=['GET'])
+def saveCacheToNextcloud():  
+
+    # nc = nextcloud_client.Client(cache["Paramètres"]["URL du client NextCloud"])
+    # nc.login(request.cookies.get('name'), request.cookies.get('pwd'))
+    # remote_path = cache["Paramètres"]["Dossier de fonctionnement"]+"/"+"NE_PAS_TOUCHER_donnees_fonctionnement"
+    # nc.put_file(remote_path+'/cache.json', 'cache.json')
+    
+    nc = nextcloud_client.Client(cache["Paramètres"]["URL du client NextCloud"])
+    nc.login(request.cookies.get('name'), request.cookies.get('pwd'))
+    remote_path = cache["Paramètres"]["Dossier de fonctionnement"]+"/"+"NE_PAS_TOUCHER_donnees_fonctionnement"
+    nc.put_file(remote_path+'/cache.json', 'cache.json')
+    link_info = nc.share_file_with_link(remote_path+'/cache.json')
+    print("Here is your link: " + link_info.get_link())
+
+    return '', 204
+
+
+@app.route('/getCacheFromNextCloud', methods=['GET'])
+def getCacheFromNextCloud():
+
+    nc = nextcloud_client.Client(cache["Paramètres"]["URL du client NextCloud"])
+    nc.login(request.cookies.get('name'), request.cookies.get('pwd'))
+    
+    remote_path = cache["Paramètres"]["Dossier de fonctionnement"]+"/"+"NE_PAS_TOUCHER_donnees_fonctionnement"
+    nc.get_file(remote_path+'/cache.json', 'cache.json')
+
+    downloadCache()
 
     return '', 204
