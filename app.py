@@ -507,7 +507,6 @@ def saveDatabase():
     nc = nextcloud_client.Client(cache["Paramètres"]["URL du client NextCloud"])
     nc.login(request.cookies.get('name'), request.cookies.get('pwd'))
     remote_path = cache["Paramètres"]["Dossier de téléversement des bases de données"]+ "/" + current_df_name + '.xlsx'
-    print(remote_path)
     # Write BytesIO to a temporary file
     with tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx") as tmp:
         tmp.write(file_obj.read())
