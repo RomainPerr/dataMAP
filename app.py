@@ -546,8 +546,8 @@ def saveCacheToNextcloud():
     nc.login(request.cookies.get('name'), request.cookies.get('pwd'))
     remote_path = cache["Paramètres"]["Dossier de fonctionnement"]+"/"+"NE_PAS_TOUCHER_donnees_fonctionnement"
     temp_cache_path = Path(tempfile.gettempdir()) / "cache.json"
-    nc.put_file(remote_path+'/cache.json', temp_cache_path)
-    link_info = nc.share_file_with_link(remote_path+'/cache.json')
+    nc.put_file(rf"{remote_path}/cache.json", str(temp_cache_path))
+    link_info = nc.share_file_with_link(rf"{remote_path}/cache.json")
     print("Here is your link: " + link_info.get_link())
 
     return '', 204
