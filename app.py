@@ -552,8 +552,8 @@ def saveCacheToNextcloud():
 
 @app.route('/getCacheFromNextCloud', methods=['GET'])
 def getCacheFromNextCloud():
+    global cache
     import time
-    import shutil
 
     # Re-initialize the Nextcloud client to avoid cached results
     nc = nextcloud_client.Client(cache["Paramètres"]["URL du client NextCloud"])
@@ -573,7 +573,6 @@ def getCacheFromNextCloud():
     # If you need to update the in-memory cache, reload from temp_cache_path:
     with open(temp_cache_path, "r", encoding='utf-8') as fp:
         try:
-            global cache
             cache = json.load(fp)
         except json.JSONDecodeError:
             cache = {}
