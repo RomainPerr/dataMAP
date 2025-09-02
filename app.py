@@ -559,7 +559,9 @@ def getCacheFromNextCloud():
     nc.login(request.cookies.get('name'), request.cookies.get('pwd'))
     
     remote_path = cache["Paramètres"]["Dossier de fonctionnement"]+"/"+"NE_PAS_TOUCHER_donnees_fonctionnement"
-    nc.get_file(remote_path+'/cache.json', THIS_FOLDER / 'cache.json')
+    temp_cache_path = Path(tempfile.gettempdir()) / "cache.json"
+    nc.get_file(remote_path+'/cache.json', temp_cache_path)
+    # Optionally, copy the file to THIS_FOLDER if needed and permitted
 
     downloadCache()
 
