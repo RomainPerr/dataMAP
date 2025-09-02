@@ -100,7 +100,8 @@ class AddEntryForm(FlaskForm):
 #generic functions ton handle parameters : new parameters can be entered in the cache.json 
 # file and will be reflected in the application automatically
 @app.route('/addEntry', methods=['GET', 'POST'])
-def addEntry(): 
+def addEntry():
+    global cache
     form = AddEntryForm()
     if form.validate_on_submit():
         category = form.category.data # the parameter being worked with
@@ -113,6 +114,7 @@ def addEntry():
 
 @app.route('/deleteEntry', methods=['POST'])
 def deleteEntry():
+    global cache
     data = request.get_json()
     key = data.get('key')
     category = data.get('category')
@@ -129,6 +131,7 @@ def deleteEntry():
 
 @app.route('/editEntry', methods=['POST'])
 def editEntry():
+    global cache
     data = request.get_json()
     key = data.get('key')
     category = data.get('category')
@@ -375,8 +378,8 @@ def saveLabelAttribution():
     labels = data.get("labels")
     if data is not None and labels is not None:
         # Convert labels list to a comma-separated string before assignment
-        # Store labels as a list in the cell
-        current_df.at[int(rowID), ("Etiquettes", "Etiquettes", "Etiquettes")] = labels
+        # Store labels as a comma-separated string in the cell
+        current_df.at[int(rowID), ("Etiquettes", "Etiquettes", "Etiquettes")] = ",".join(map(str, labels))
     return '', 204
 
 @app.route('/getLabelsForRow/<rowID>')
