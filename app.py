@@ -15,9 +15,11 @@ import os
 
 import gestionDB # functions related to the data display and data management
 
+from pathlib import Path
+THIS_FOLDER = Path(__file__).parent.resolve()
 
 app = Flask(__name__)
-app.config.from_pyfile('settings.py')
+app.config.from_pyfile(THIS_FOLDER / 'settings.py')
 
 cache = {}
 
@@ -28,13 +30,13 @@ cache = {}
 def uploadCache():
     global cache    
 
-    with open("cache.json", "w", encoding='utf-8') as fp:
+    with open(THIS_FOLDER / "cache.json", "w", encoding='utf-8') as fp:
         json.dump(cache, fp, ensure_ascii=False)
     return '', 204
 
 
 def reinitCache():
-    with open("cache_reinit.json", "r", encoding='utf-8') as fp:
+    with open(THIS_FOLDER / "cache_reinit.json", "r", encoding='utf-8') as fp:
         try:
             global cache
             cache = json.load(fp)
@@ -46,11 +48,11 @@ def reinitCache():
 def downloadCache():
     global cache
 
-    if not os.path.exists("cache.json") or os.path.getsize("cache.json") == 0:
+    if not os.path.exists(THIS_FOLDER / "cache.json") or os.path.getsize(THIS_FOLDER / "cache.json") == 0:
         reinitCache()
         return '', 204
-    
-    with open("cache.json", "r", encoding='utf-8') as fp:
+
+    with open(THIS_FOLDER / "cache.json", "r", encoding='utf-8') as fp:
         try:
             cache = json.load(fp)
         except json.JSONDecodeError:
@@ -534,7 +536,7 @@ def saveCacheToNextcloud():
     nc = nextcloud_client.Client(cache["Paramètres"]["URL du client NextCloud"])
     nc.login(request.cookies.get('name'), request.cookies.get('pwd'))
     remote_path = cache["Paramètres"]["Dossier de fonctionnement"]+"/"+"NE_PAS_TOUCHER_donnees_fonctionnement"
-    nc.put_file(remote_path+'/cache.json', 'cache.json')
+    nc.put_file(remote_path+'/cache.json', THIS_FOLDER / 'cache.json')
     link_info = nc.share_file_with_link(remote_path+'/cache.json')
     print("Here is your link: " + link_info.get_link())
 
@@ -548,7 +550,7 @@ def getCacheFromNextCloud():
     nc.login(request.cookies.get('name'), request.cookies.get('pwd'))
     
     remote_path = cache["Paramètres"]["Dossier de fonctionnement"]+"/"+"NE_PAS_TOUCHER_donnees_fonctionnement"
-    nc.get_file(remote_path+'/cache.json', 'cache.json')
+    nc.get_file(remote_path+'/cache.json', THIS_FOLDER / 'cache.json')
 
     downloadCache()
 
