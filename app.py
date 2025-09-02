@@ -30,7 +30,8 @@ cache = {}
 def uploadCache():
     global cache    
 
-    with open(THIS_FOLDER / "tmp/cache.json", "w", encoding='utf-8') as fp:
+    cache_path = Path(tempfile.gettempdir()) / "cache.json"
+    with open(cache_path, "w", encoding='utf-8') as fp:
         json.dump(cache, fp, ensure_ascii=False)
     return '', 204
 
