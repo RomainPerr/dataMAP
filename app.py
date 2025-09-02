@@ -157,6 +157,7 @@ def menuDB():
 current_df = None
 current_df_name = None
 current_filter = None
+current_filter_selection = None
 
 
 @app.route('/gestionDB') #auto-reload without specifying database, it will use the current_df_name
@@ -179,7 +180,7 @@ def render(db):
     global current_df
     global current_df_name
     global current_filter
-    
+    global current_filter_selection
 
     if db == 'pas de base de données spécifiée':
         return "No database specified. Please select a database from the menu.", 400
@@ -256,8 +257,8 @@ def render(db):
                 filter_data[gestionDB.colTupleToString(col)].append("non rempli") #mandatory use of a stringified key because tuples can't be used as keys outside python
     
     current_filter_html = {}
-    if current_filter is not None:
-        current_filter_html = {gestionDB.colTupleToString(k): v for k, v in current_filter.items()}
+    if current_filter_selection is not None:
+        current_filter_html = {gestionDB.colTupleToString(k): v for k, v in current_filter_selection.items()}
 
 
     df = gestionDB.df_to_html(current_df, ColNotToShow, current_filter)
@@ -395,10 +396,12 @@ def getLabelsForRow(rowID):
 @app.route('/applyFilters', methods=['POST'])
 def applyFilters():
     global current_filter
+    global current_filter_selection
     current_filter = request.get_json()
     if current_filter is not None:
         # Convert all keys in current_filter from string to tuple using colStringToTuple
         current_filter = {gestionDB.colStringToTuple(k) if k != "Etiquettes" else k: v for k, v in current_filter.items()}
+        current_filter_selection = current_filter.copy() # keep initial Etiquettes selection for rendering purposes
     
 
 
