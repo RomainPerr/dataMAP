@@ -535,22 +535,24 @@ def saveDatabase():
 
 
 @app.route('/saveCacheToNextcloud', methods=['GET'])
-def saveCacheToNextcloud():  
-
-    # nc = nextcloud_client.Client(cache["Paramètres"]["URL du client NextCloud"])
-    # nc.login(request.cookies.get('name'), request.cookies.get('pwd'))
-    # remote_path = cache["Paramètres"]["Dossier de fonctionnement"]+"/"+"NE_PAS_TOUCHER_donnees_fonctionnement"
-    # nc.put_file(remote_path+'/cache.json', 'cache.json')
-    
+def saveCacheToNextcloud():
     nc = nextcloud_client.Client(cache["Paramètres"]["URL du client NextCloud"])
     nc.login(request.cookies.get('name'), request.cookies.get('pwd'))
-    remote_path = cache["Paramètres"]["Dossier de fonctionnement"]+"/"+"NE_PAS_TOUCHER_donnees_fonctionnement"
+    remote_path = cache["Paramètres"]["Dossier de fonctionnement"] + "/NE_PAS_TOUCHER_donnees_fonctionnement/cache.json"
     temp_cache_path = Path(tempfile.gettempdir()) / "cache.json"
-    nc.put_file(remote_path+'/cache.json', str(temp_cache_path))
-    link_info = nc.share_file_with_link(rf"{remote_path}/cache.json")
+
+    # Make sure the cache is up to date before uploading
+    uploadCache()
+
+    # Upload the local cache.json to the exact remote path
+    nc.put_file(remote_path, str(temp_cache_path))
+
+    # Optionally, share the file and print the link
+    link_info = nc.share_file_with_link(remote_path)
     print("Here is your link: " + link_info.get_link())
 
     return '', 204
+
 
 
 @app.route('/getCacheFromNextCloud', methods=['GET'])
