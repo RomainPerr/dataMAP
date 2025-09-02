@@ -568,9 +568,14 @@ def getCacheFromNextCloud():
     nc.get_file(remote_path + '/cache.json', temp_cache_path)
     # Optionally, copy the file to THIS_FOLDER if needed and permitted
 
-    with open(temp_cache_path, "r", encoding="utf-8") as fp:
-        global cache
-        cache = json.load(fp)
-        uploadCache()
+    # On read-only file systems (e.g., Vercel), avoid copying to THIS_FOLDER
+    # Instead, just use the cache in temp_cache_path or handle as needed for your deployment
+    # If you need to update the in-memory cache, reload from temp_cache_path:
+    with open(temp_cache_path, "r", encoding='utf-8') as fp:
+        try:
+            global cache
+            cache = json.load(fp)
+        except json.JSONDecodeError:
+            cache = {}
 
     return '', 204
