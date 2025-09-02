@@ -552,13 +552,19 @@ def saveCacheToNextcloud():
 
 @app.route('/getCacheFromNextCloud', methods=['GET'])
 def getCacheFromNextCloud():
+    import time
 
+    # Re-initialize the Nextcloud client to avoid cached results
     nc = nextcloud_client.Client(cache["Paramètres"]["URL du client NextCloud"])
     nc.login(request.cookies.get('name'), request.cookies.get('pwd'))
-    
-    remote_path = cache["Paramètres"]["Dossier de fonctionnement"]+"/"+"NE_PAS_TOUCHER_donnees_fonctionnement"
+
+    remote_path = cache["Paramètres"]["Dossier de fonctionnement"] + "/" + "NE_PAS_TOUCHER_donnees_fonctionnement"
     temp_cache_path = Path(tempfile.gettempdir()) / "cache.json"
-    nc.get_file(remote_path+'/cache.json', temp_cache_path)
+
+    # Wait briefly to ensure the file is updated on Nextcloud
+    time.sleep(1)
+
+    nc.get_file(remote_path + '/cache.json', temp_cache_path)
     # Optionally, copy the file to THIS_FOLDER if needed and permitted
 
     downloadCache()
