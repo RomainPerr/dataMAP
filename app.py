@@ -372,8 +372,10 @@ def saveLabelAttribution():
     global current_df
     data = request.get_json()
     rowID = data.get("rowID")
-    labels = data.get("labels", [])
-    if data is not None:
+    labels = data.get("labels")
+    if data is not None and labels is not None:
+        # Convert labels list to a comma-separated string before assignment
+        # Store labels as a list in the cell
         current_df.at[int(rowID), ("Etiquettes", "Etiquettes", "Etiquettes")] = labels
     return '', 204
 
@@ -382,6 +384,8 @@ def getLabelsForRow(rowID):
     global current_df
     df = current_df
     labels = df[("Etiquettes", "Etiquettes", "Etiquettes")].iloc[int(rowID)]
+    if labels is None or labels == "" or (isinstance(labels, float) and pd.isna(labels)):
+        labels = []
     return jsonify({"labels": labels}), 200
 
 @app.route('/applyFilters', methods=['POST'])
@@ -391,6 +395,7 @@ def applyFilters():
     if current_filter is not None:
         # Convert all keys in current_filter from string to tuple using colStringToTuple
         current_filter = {gestionDB.colStringToTuple(k) if k != "Etiquettes" else k: v for k, v in current_filter.items()}
+    
 
 
 

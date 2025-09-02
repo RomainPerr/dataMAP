@@ -147,7 +147,12 @@ def filter_df(df, current_filter):
             if "non rempli" in values:
                 values += ['']
             if key == "Etiquettes":
-                df = df[df[("Etiquettes","Etiquettes", "Etiquettes")].apply(lambda etiquettes: any(e in values for e in etiquettes if isinstance(etiquettes, list)))]
+                df = df[df[("Etiquettes","Etiquettes", "Etiquettes")].apply(
+                    lambda etiquettes: (
+                        any(e in values for e in etiquettes) if isinstance(etiquettes, list)
+                        else etiquettes in values
+                    )
+                )]
             else:
                 df = df[df[key].isin(values)]
 
