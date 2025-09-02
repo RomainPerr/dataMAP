@@ -568,8 +568,9 @@ def getCacheFromNextCloud():
     nc.get_file(remote_path + '/cache.json', temp_cache_path)
     # Optionally, copy the file to THIS_FOLDER if needed and permitted
 
-    shutil.copy(temp_cache_path, THIS_FOLDER / "cache.json")
-
-    downloadCache()
+    with open(temp_cache_path, "r", encoding="utf-8") as fp:
+        global cache
+        cache = json.load(fp)
+        uploadCache()
 
     return '', 204
